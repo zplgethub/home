@@ -32,7 +32,7 @@
           一言
         </button>
         <button
-          v-if="playerHasId"
+          v-if="hasPlaylist"
           id="music-tab"
           type="button"
           role="tab"
@@ -47,7 +47,7 @@
       </div>
       <div class="panel-body">
         <Hitokoto />
-        <Music v-if="playerHasId" />
+        <Music v-if="hasPlaylist" />
       </div>
     </section>
   </div>
@@ -59,11 +59,12 @@ import { mainStore } from "@/store";
 import Music from "@/components/Music.vue";
 import Hitokoto from "@/components/Hitokoto.vue";
 import Weather from "@/components/Weather.vue";
+import musicPlaylist from "@/assets/music-playlist.json";
 
 const store = mainStore();
 const currentTime = ref(getCurrentTime());
 const timeInterval = ref(null);
-const playerHasId = import.meta.env.VITE_SONG_ID;
+const hasPlaylist = musicPlaylist.length > 0;
 
 onMounted(() => {
   timeInterval.value = setInterval(() => {

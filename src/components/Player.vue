@@ -9,7 +9,7 @@
     :loop="store.playerLoop"
     :order="store.playerOrder"
     :volume="volume"
-    :showLrc="true"
+    :showLrc="hasLrc"
     :listFolded="listFolded"
     :listMaxHeight="listMaxHeight"
     :noticeSwitch="false"
@@ -41,18 +41,6 @@ const props = defineProps({
     default: 0.7,
     validator: (value) => value >= 0 && value <= 1,
   },
-  songServer: {
-    type: String,
-    default: "netease",
-  },
-  songType: {
-    type: String,
-    default: "playlist",
-  },
-  songId: {
-    type: String,
-    default: "7452421335",
-  },
   listFolded: {
     type: Boolean,
     default: false,
@@ -64,12 +52,13 @@ const props = defineProps({
 });
 
 const listHeight = computed(() => `${props.listMaxHeight}px`);
+const hasLrc = computed(() => playList.value.some((song) => song.lrc));
 const emit = defineEmits(["loaded", "error"]);
 
 onMounted(async () => {
   await nextTick();
   try {
-    const result = await getPlayerList(props.songServer, props.songType, props.songId);
+    const result = await getPlayerList();
     if (!result?.length) throw new Error("播放列表为空");
     playList.value = result;
     store.musicIsOk = true;

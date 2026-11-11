@@ -1,16 +1,12 @@
 <template>
   <div class="weather" aria-live="polite">
     <template v-if="weatherStatus === 'success'">
-      <span class="city">{{ weatherData.adCode.city }}</span>
-      <span>{{ weatherData.weather.weather }}</span>
-      <span class="temperature">{{ weatherData.weather.temperature }}℃</span>
+      <span class="city">{{ weatherData.city }}</span>
+      <span>{{ weatherData.weather }}</span>
+      <span class="temperature">{{ weatherData.temperature }}℃</span>
       <span class="wind">
-        {{
-          weatherData.weather.winddirection?.endsWith("风")
-            ? weatherData.weather.winddirection
-            : weatherData.weather.winddirection + "风"
-        }}
-        {{ weatherData.weather.windpower }} 级
+        {{ weatherData.winddirection }}
+        {{ weatherData.windpower }} 级
       </span>
     </template>
     <span v-else-if="weatherStatus === 'loading'" class="weather-status">正在获取当地天气…</span>
@@ -19,65 +15,79 @@
 </template>
 
 <script setup>
-import { getAdcode, getWeather, getOtherWeather } from "@/api";
+import { getGeocoding, getWeather } from "@/api";
 import { Error } from "@icon-park/vue-next";
 
-const mainKey = import.meta.env.VITE_WEATHER_KEY;
+const weatherCity = import.meta.env.VITE_WEATHER_CITY || "北京";
 const weatherStatus = ref("loading");
 const weatherData = reactive({
-  adCode: {
-    city: null,
-    adcode: null,
-  },
-  weather: {
-    weather: null,
-    temperature: null,
-    winddirection: null,
-    windpower: null,
-  },
+  city: "",
+  weather: "",
+  temperature: null,
+  winddirection: "",
+  windpower: null,
 });
 
-const getTemperature = (min, max) => {
-  try {
-    const average = (Number(min) + Number(max)) / 2;
-    return Math.round(average);
-  } catch (error) {
-    console.error("计算温度出现错误：", error);
-    return "NaN";
-  }
+// WMO 天气代码对照
+const weatherTextMap = {
+  0: "晴",
+  1: "大部晴朗",
+  2: "多云",
+  3: "阴",
+  45: "雾",
+  48: "雾凇",
+  51: "毛毛雨",
+  53: "小雨",
+  55: "中雨",
+  56: "冻毛毛雨",
+  57: "冻雨",
+  61: "小雨",
+  63: "中雨",
+  65: "大雨",
+  66: "冻雨",
+  67: "强冻雨",
+  71: "小雪",
+  73: "中雪",
+  75: "大雪",
+  77: "米雪",
+  80: "阵雨",
+  81: "强阵雨",
+  82: "暴雨",
+  85: "阵雪",
+  86: "强阵雪",
+  95: "雷阵雨",
+  96: "雷阵雨伴冰雹",
+  99: "强雷暴伴冰雹",
+};
+
+// 风向角度转中文
+const getWindDirection = (degree) => {
+  const directions = ["北风", "东北风", "东风", "东南风", "南风", "西南风", "西风", "西北风"];
+  return directions[Math.round(Number(degree) / 45) % 8];
+};
+
+// 风速（km/h）转风力等级
+const getWindPower = (speed) => {
+  const levels = [1, 6, 12, 20, 29, 39, 50, 62, 75, 89, 103, 118];
+  return levels.findIndex((limit) => Number(speed) < limit) === -1
+    ? 12
+    : levels.findIndex((limit) => Number(speed) < limit);
 };
 
 const getWeatherData = async () => {
   try {
-    if (!mainKey) {
-      const result = await getOtherWeather();
-      const data = result.result;
-      weatherData.adCode = {
-        city: data.city.City || "未知地区",
-      };
-      weatherData.weather = {
-        weather: data.condition.day_weather,
-        temperature: getTemperature(data.condition.min_degree, data.condition.max_degree),
-        winddirection: data.condition.day_wind_direction,
-        windpower: data.condition.day_wind_power,
-      };
-    } else {
-      const adCode = await getAdcode(mainKey);
-      if (adCode.infocode !== "10000") {
-        throw new Error("地区查询失败");
-      }
-      weatherData.adCode = {
-        city: adCode.city,
-        adcode: adCode.adcode,
-      };
-      const result = await getWeather(mainKey, weatherData.adCode.adcode);
-      weatherData.weather = {
-        weather: result.lives[0].weather,
-        temperature: result.lives[0].temperature,
-        winddirection: result.lives[0].winddirection,
-        windpower: result.lives[0].windpower,
-      };
-    }
+    const geocoding = await getGeocoding(weatherCity);
+    const location = geocoding.results?.[0];
+    if (!location) throw new Error("城市查询失败");
+
+    const result = await getWeather(location.latitude, location.longitude);
+    const current = result.current;
+
+    weatherData.city = location.name;
+    weatherData.weather = weatherTextMap[current.weather_code] || "未知天气";
+    weatherData.temperature = Math.round(current.temperature_2m);
+    weatherData.winddirection = getWindDirection(current.wind_direction_10m);
+    weatherData.windpower = getWindPower(current.wind_speed_10m);
     weatherStatus.value = "success";
   } catch (error) {
     weatherStatus.value = "error";

@@ -1,43 +1,19 @@
-// import axios from "axios";
-import fetchJsonp from "fetch-jsonp";
+import musicPlaylist from "@/assets/music-playlist.json";
 
 /**
  * 音乐播放器
+ * 使用本地歌单，音频为可自由使用的开源示例作品（SoundHelix）
  */
 
 // 获取音乐播放列表
-export const getPlayerList = async (server, type, id) => {
-  const res = await fetch(
-    `${import.meta.env.VITE_SONG_API}?server=${server}&type=${type}&id=${id}`,
-  );
-  const data = await res.json();
-
-  if (data[0].url.startsWith("@")) {
-    // eslint-disable-next-line no-unused-vars
-    const [handle, jsonpCallback, jsonpCallbackFunction, url] = data[0].url.split("@").slice(1);
-    const jsonpData = await fetchJsonp(url).then((res) => res.json());
-    const domain = (
-      jsonpData.req_0.data.sip.find((i) => !i.startsWith("http://ws")) ||
-      jsonpData.req_0.data.sip[0]
-    ).replace("http://", "https://");
-
-    return data.map((v, i) => ({
-      name: v.name || v.title,
-      artist: v.artist || v.author,
-      url: domain + jsonpData.req_0.data.midurlinfo[i].purl,
-      cover: v.cover || v.pic,
-      lrc: v.lrc,
-    }));
-  } else {
-    return data.map((v) => ({
-      name: v.name || v.title,
-      artist: v.artist || v.author,
-      url: v.url,
-      cover: v.cover || v.pic,
-      lrc: v.lrc,
-    }));
-  }
-};
+export const getPlayerList = async () =>
+  musicPlaylist.map((song) => ({
+    name: song.name,
+    artist: song.artist,
+    url: song.url,
+    cover: song.cover,
+    lrc: song.lrc || "",
+  }));
 
 /**
  * 一言
@@ -51,25 +27,21 @@ export const getHitokoto = async () => {
 
 /**
  * 天气
+ * 使用 Open-Meteo，开源、免 Key
  */
 
-// 获取高德地理位置信息
-export const getAdcode = async (key) => {
-  const res = await fetch(`https://restapi.amap.com/v3/ip?key=${key}`);
-  return await res.json();
-};
-
-// 获取高德地理天气信息
-export const getWeather = async (key, city) => {
+// 根据城市名称获取经纬度
+export const getGeocoding = async (city) => {
   const res = await fetch(
-    `https://restapi.amap.com/v3/weather/weatherInfo?key=${key}&city=${city}`,
+    `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=zh&format=json`,
   );
   return await res.json();
 };
 
-// 获取教书先生天气 API
-// https://api.oioweb.cn/doc/weather/GetWeather
-export const getOtherWeather = async () => {
-  const res = await fetch("https://api.oioweb.cn/api/weather/GetWeather");
+// 根据经纬度获取当前天气
+export const getWeather = async (latitude, longitude) => {
+  const res = await fetch(
+    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m&timezone=auto`,
+  );
   return await res.json();
 };
