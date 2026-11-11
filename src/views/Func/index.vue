@@ -1,30 +1,55 @@
 <template>
-  <!-- 功能区域 -->
-  <div :class="store.mobileFuncState ? 'function mobile' : 'function'">
-    <el-row :gutter="20">
-      <el-col :span="12">
-        <div class="left">
-          <Hitokoto />
-          <Music v-if="playerHasId" />
-        </div>
-      </el-col>
-      <el-col :span="12">
-        <div class="right cards">
-          <div class="time">
-            <div class="date">
-              <span>{{ currentTime.year }}&nbsp;年&nbsp;</span>
-              <span>{{ currentTime.month }}&nbsp;月&nbsp;</span>
-              <span>{{ currentTime.day }}&nbsp;日&nbsp;</span>
-              <span class="sm-hidden">{{ currentTime.weekday }}</span>
-            </div>
-            <div class="text">
-              <span> {{ currentTime.hour }}:{{ currentTime.minute }}:{{ currentTime.second }}</span>
-            </div>
-          </div>
-          <Weather />
-        </div>
-      </el-col>
-    </el-row>
+  <div class="dashboard">
+    <div class="dashboard-heading">
+      <p class="section-kicker">Daily brief</p>
+      <span class="edition">No. 02</span>
+    </div>
+
+    <section class="time-block" aria-label="当前日期、时间与天气">
+      <p class="date">
+        {{ currentTime.year }} / {{ currentTime.month }} / {{ currentTime.day }}
+        <span>·</span>
+        {{ currentTime.weekday }}
+      </p>
+      <div class="clock" aria-live="off">
+        <span>{{ currentTime.hour }}:{{ currentTime.minute }}</span>
+        <span class="seconds">{{ currentTime.second }}</span>
+      </div>
+      <Weather />
+    </section>
+
+    <section class="content-panel">
+      <div class="panel-tabs" role="tablist" aria-label="一言与音乐切换">
+        <button
+          id="quote-tab"
+          type="button"
+          role="tab"
+          :aria-selected="!store.musicOpenState"
+          aria-controls="quote-panel"
+          :class="{ active: !store.musicOpenState }"
+          @click="store.musicOpenState = false"
+        >
+          一言
+        </button>
+        <button
+          v-if="playerHasId"
+          id="music-tab"
+          type="button"
+          role="tab"
+          :aria-selected="store.musicOpenState"
+          aria-controls="music-panel"
+          :class="{ active: store.musicOpenState }"
+          @click="store.musicOpenState = true"
+        >
+          音乐
+        </button>
+        <span class="panel-hint">{{ store.musicOpenState ? "LISTEN & RELAX" : "A LINE A DAY" }}</span>
+      </div>
+      <div class="panel-body">
+        <Hitokoto />
+        <Music v-if="playerHasId" />
+      </div>
+    </section>
   </div>
 </template>
 
@@ -36,22 +61,14 @@ import Hitokoto from "@/components/Hitokoto.vue";
 import Weather from "@/components/Weather.vue";
 
 const store = mainStore();
-
-// 当前时间
-const currentTime = ref({});
+const currentTime = ref(getCurrentTime());
 const timeInterval = ref(null);
-
-// 播放器 id
 const playerHasId = import.meta.env.VITE_SONG_ID;
 
-// 更新时间
-const updateTimeData = () => {
-  currentTime.value = getCurrentTime();
-};
-
 onMounted(() => {
-  updateTimeData();
-  timeInterval.value = setInterval(updateTimeData, 1000);
+  timeInterval.value = setInterval(() => {
+    currentTime.value = getCurrentTime();
+  }, 1000);
 });
 
 onBeforeUnmount(() => {
@@ -60,91 +77,134 @@ onBeforeUnmount(() => {
 </script>
 
 <style lang="scss" scoped>
-.function {
-  height: 165px;
+.dashboard {
+  height: 100%;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
+}
+
+.dashboard-heading {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  &.mobile {
-    .el-row {
-      .el-col {
-        &:nth-of-type(1) {
-          display: contents;
-        }
-        &:nth-of-type(2) {
-          display: none;
-        }
-      }
+  gap: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--ink);
+}
+
+.edition {
+  color: var(--muted);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.72rem;
+  font-style: italic;
+}
+
+.time-block {
+  padding: 30px 0 34px;
+}
+
+.date {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+}
+
+.clock {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 12px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(4rem, 6.4vw, 6.3rem);
+  letter-spacing: -0.065em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.seconds {
+  color: var(--accent);
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+}
+
+.content-panel {
+  margin-top: auto;
+}
+
+.panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+
+  button {
+    position: relative;
+    padding: 0 0 13px;
+    color: var(--muted);
+    font-size: 0.8rem;
+    transition: color 180ms ease;
+
+    &::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      bottom: -1px;
+      left: 0;
+      height: 2px;
+      background: var(--accent);
+      transform: scaleX(0);
+      transition: transform 180ms ease;
+    }
+
+    &:hover,
+    &.active {
+      color: var(--ink);
+    }
+
+    &.active::after {
+      transform: scaleX(1);
     }
   }
-  .el-row {
-    height: 100%;
-    width: 100%;
-    margin: 0 !important;
-    .el-col {
-      &:nth-of-type(1) {
-        padding-left: 0 !important;
-      }
-      &:nth-of-type(2) {
-        padding-right: 0 !important;
-      }
-      @media (max-width: 910px) {
-        &:nth-of-type(1) {
-          display: none;
-        }
-        &:nth-of-type(2) {
-          padding: 0 !important;
-          flex: none;
-          max-width: none;
-          width: 100%;
-        }
-      }
-    }
-    .left,
-    .right {
-      width: 100%;
-      height: 100%;
-    }
-    .right {
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: space-between;
-      animation: fade 0.5s;
-      .time {
-        font-size: 1.1rem;
-        text-align: center;
-        .date {
-          text-overflow: ellipsis;
-          overflow-x: hidden;
-          white-space: nowrap;
-        }
-        .text {
-          margin-top: 10px;
-          font-size: 3.25rem;
-          letter-spacing: 2px;
-          font-family: "UnidreamLED";
-        }
-        @media (min-width: 1201px) and (max-width: 1280px) {
-          font-size: 1rem;
-        }
-        @media (min-width: 911px) and (max-width: 992px) {
-          font-size: 1rem;
-          .text {
-            font-size: 2.75rem;
-          }
-        }
-      }
-      .weather {
-        text-align: center;
-        width: 100%;
-        text-overflow: ellipsis;
-        overflow-x: hidden;
-        white-space: nowrap;
-      }
-    }
+}
+
+.panel-hint {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+}
+
+.panel-body {
+  min-height: 264px;
+  padding-top: 26px;
+}
+
+@media (max-width: 960px) {
+  .clock {
+    font-size: clamp(3.5rem, 7vw, 4.8rem);
+  }
+
+  .panel-hint {
+    display: none;
+  }
+}
+
+@media (max-width: 780px) {
+  .dashboard {
+    min-height: 540px;
+  }
+
+  .clock {
+    font-size: clamp(4.4rem, 17vw, 6.5rem);
+  }
+}
+
+@media (max-width: 380px) {
+  .clock {
+    font-size: 4.2rem;
   }
 }
 </style>

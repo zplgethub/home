@@ -1,19 +1,20 @@
 <template>
-  <div class="weather" v-if="weatherData.adCode.city && weatherData.weather.weather">
-    <span>{{ weatherData.adCode.city }}&nbsp;</span>
-    <span>{{ weatherData.weather.weather }}&nbsp;</span>
-    <span>{{ weatherData.weather.temperature }}℃</span>
-    <span class="sm-hidden">
-      &nbsp;{{
-        weatherData.weather.winddirection?.endsWith("风")
-          ? weatherData.weather.winddirection
-          : weatherData.weather.winddirection + "风"
-      }}&nbsp;
-    </span>
-    <span class="sm-hidden">{{ weatherData.weather.windpower }}&nbsp;级</span>
-  </div>
-  <div class="weather" v-else>
-    <span>天气数据获取失败</span>
+  <div class="weather" aria-live="polite">
+    <template v-if="weatherStatus === 'success'">
+      <span class="city">{{ weatherData.adCode.city }}</span>
+      <span>{{ weatherData.weather.weather }}</span>
+      <span class="temperature">{{ weatherData.weather.temperature }}℃</span>
+      <span class="wind">
+        {{
+          weatherData.weather.winddirection?.endsWith("风")
+            ? weatherData.weather.winddirection
+            : weatherData.weather.winddirection + "风"
+        }}
+        {{ weatherData.weather.windpower }} 级
+      </span>
+    </template>
+    <span v-else-if="weatherStatus === 'loading'" class="weather-status">正在获取当地天气…</span>
+    <span v-else class="weather-status">天气数据暂不可用</span>
   </div>
 </template>
 
@@ -21,27 +22,23 @@
 import { getAdcode, getWeather, getOtherWeather } from "@/api";
 import { Error } from "@icon-park/vue-next";
 
-// 高德开发者 Key
 const mainKey = import.meta.env.VITE_WEATHER_KEY;
-
-// 天气数据
+const weatherStatus = ref("loading");
 const weatherData = reactive({
   adCode: {
-    city: null, // 城市
-    adcode: null, // 城市编码
+    city: null,
+    adcode: null,
   },
   weather: {
-    weather: null, // 天气现象
-    temperature: null, // 实时气温
-    winddirection: null, // 风向描述
-    windpower: null, // 风力级别
+    weather: null,
+    temperature: null,
+    winddirection: null,
+    windpower: null,
   },
 });
 
-// 取出天气平均值
 const getTemperature = (min, max) => {
   try {
-    // 计算平均值并四舍五入
     const average = (Number(min) + Number(max)) / 2;
     return Math.round(average);
   } catch (error) {
@@ -50,18 +47,13 @@ const getTemperature = (min, max) => {
   }
 };
 
-// 获取天气数据
 const getWeatherData = async () => {
   try {
-    // 获取地理位置信息
     if (!mainKey) {
-      console.log("未配置，使用备用天气接口");
       const result = await getOtherWeather();
-      console.log(result);
       const data = result.result;
       weatherData.adCode = {
         city: data.city.City || "未知地区",
-        // adcode: data.city.cityId,
       };
       weatherData.weather = {
         weather: data.condition.day_weather,
@@ -70,17 +62,14 @@ const getWeatherData = async () => {
         windpower: data.condition.day_wind_power,
       };
     } else {
-      // 获取 Adcode
       const adCode = await getAdcode(mainKey);
-      console.log(adCode);
       if (adCode.infocode !== "10000") {
-        throw "地区查询失败";
+        throw new Error("地区查询失败");
       }
       weatherData.adCode = {
         city: adCode.city,
         adcode: adCode.adcode,
       };
-      // 获取天气信息
       const result = await getWeather(mainKey, weatherData.adCode.adcode);
       weatherData.weather = {
         weather: result.lives[0].weather,
@@ -89,26 +78,60 @@ const getWeatherData = async () => {
         windpower: result.lives[0].windpower,
       };
     }
+    weatherStatus.value = "success";
   } catch (error) {
+    weatherStatus.value = "error";
     console.error("天气信息获取失败:" + error);
-    onError("天气信息获取失败");
+    ElMessage({
+      message: "天气信息获取失败",
+      grouping: true,
+      icon: h(Error, {
+        theme: "filled",
+        fill: "#aa4b34",
+      }),
+    });
   }
 };
 
-// 报错信息
-const onError = (message) => {
-  ElMessage({
-    message,
-    icon: h(Error, {
-      theme: "filled",
-      fill: "#efefef",
-    }),
-  });
-  console.error(message);
-};
-
 onMounted(() => {
-  // 调用获取天气
   getWeatherData();
 });
 </script>
+
+<style lang="scss" scoped>
+.weather {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.city {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.temperature {
+  color: var(--accent);
+}
+
+.wind {
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+
+.weather-status {
+  color: var(--muted);
+}
+
+@media (max-width: 480px) {
+  .wind {
+    width: 100%;
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+</style>

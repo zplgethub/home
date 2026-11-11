@@ -1,50 +1,36 @@
 <template>
   <div
-    class="hitokoto cards"
     v-show="!store.musicOpenState"
-    @mouseenter="openMusicShow = true"
-    @mouseleave="openMusicShow = false"
-    @click.stop
+    id="quote-panel"
+    class="hitokoto"
+    role="tabpanel"
+    aria-labelledby="quote-tab"
   >
-    <!-- 打开音乐面板 -->
-    <Transition name="el-fade-in-linear">
-      <div
-        class="open-music"
-        v-show="openMusicShow && store.musicIsOk"
-        @click="store.musicOpenState = true"
-      >
-        <music-menu theme="filled" size="18" fill="#efefef" />
-        <span>打开音乐播放器</span>
-      </div>
+    <Transition name="fade" mode="out-in">
+      <blockquote :key="hitokotoData.text" class="quote">
+        <p>“{{ hitokotoData.text }}”</p>
+        <footer>— {{ hitokotoData.from }}</footer>
+      </blockquote>
     </Transition>
-    <!-- 一言内容 -->
-    <Transition name="el-fade-in-linear" mode="out-in">
-      <div :key="hitokotoData.text" class="content" @click="updateHitokoto">
-        <span class="text">{{ hitokotoData.text }}</span>
-        <span class="from">-「&nbsp;{{ hitokotoData.from }}&nbsp;」</span>
-      </div>
-    </Transition>
+    <button class="refresh" type="button" @click="updateHitokoto">
+      <span>换一句</span>
+      <span aria-hidden="true">↻</span>
+    </button>
   </div>
 </template>
 
 <script setup>
-import { MusicMenu, Error } from "@icon-park/vue-next";
+import { Error } from "@icon-park/vue-next";
 import { getHitokoto } from "@/api";
 import { mainStore } from "@/store";
 import debounce from "@/utils/debounce.js";
 
 const store = mainStore();
-
-// 开启音乐面板按钮显隐
-const openMusicShow = ref(false);
-
-// 一言数据
 const hitokotoData = reactive({
   text: "这里应该显示一句话",
   from: "無名",
 });
 
-// 获取一言数据
 const getHitokotoData = async () => {
   try {
     const result = await getHitokoto();
@@ -53,19 +39,18 @@ const getHitokotoData = async () => {
   } catch (error) {
     ElMessage({
       message: "一言获取失败",
+      grouping: true,
       icon: h(Error, {
         theme: "filled",
-        fill: "#efefef",
+        fill: "#aa4b34",
       }),
     });
-    hitokotoData.text = "这里应该显示一句话";
-    hitokotoData.from = "無名";
+    hitokotoData.text = "愿你今天也能发现一些小小的美好。";
+    hitokotoData.from = "flying";
   }
 };
 
-// 更新一言数据
 const updateHitokoto = () => {
-  // 防抖
   debounce(() => {
     getHitokotoData();
   }, 500);
@@ -78,51 +63,51 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .hitokoto {
-  width: 100%;
-  height: 100%;
-  padding: 20px;
-  animation: fade 0.5s;
-  .open-music {
-    width: 100%;
-    position: absolute;
-    top: 0;
-    left: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #00000026;
-    padding: 4px 0;
-    border-radius: 8px 8px 0 0;
-    .i-icon {
-      width: 18px;
-      height: 18px;
-      display: block;
-      margin-right: 8px;
-    }
-    span {
-      font-size: 0.95rem;
-    }
+  min-height: 238px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.quote {
+  margin: 0;
+
+  p {
+    display: -webkit-box;
+    overflow: hidden;
+    font-family: Georgia, "Times New Roman", "Songti SC", serif;
+    font-size: clamp(1.2rem, 2vw, 1.5rem);
+    line-height: 1.75;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
   }
-  .content {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-evenly;
-    .text {
-      font-size: 1.1rem;
-      word-break: break-all;
-      text-overflow: ellipsis;
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-line-clamp: 3;
-      -webkit-box-orient: vertical;
-    }
-    .from {
-      margin-top: 10px;
-      font-weight: bold;
-      align-self: flex-end;
-      font-size: 1.1rem;
-    }
+
+  footer {
+    margin-top: 18px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-align: right;
+  }
+}
+
+.refresh {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--muted);
+  font-size: 0.72rem;
+  transition:
+    border-color 180ms ease,
+    color 180ms ease;
+
+  &:hover {
+    border-color: var(--accent);
+    color: var(--accent);
   }
 }
 </style>

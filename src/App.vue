@@ -1,254 +1,172 @@
 <template>
-  <!-- 加载 -->
-  <Loading />
-  <!-- 壁纸 -->
-  <Background @loadComplete="loadComplete" />
-  <!-- 主界面 -->
-  <Transition name="fade" mode="out-in">
-    <main id="main" v-if="store.imgLoadStatus">
-      <div class="container" v-show="!store.backgroundShow">
-        <section class="all" v-show="!store.setOpenState">
-          <MainLeft />
-          <MainRight v-show="!store.boxOpenState" />
-          <Box v-show="store.boxOpenState" />
-        </section>
-        <section class="more" v-show="store.setOpenState" @click="store.setOpenState = false">
-          <MoreSet />
-        </section>
-      </div>
-      <!-- 移动端菜单按钮 -->
-      <Icon
-        class="menu"
-        size="24"
-        v-show="!store.backgroundShow"
-        @click="store.mobileOpenState = !store.mobileOpenState"
-      >
-        <component :is="store.mobileOpenState ? CloseSmall : HamburgerButton" />
-      </Icon>
-      <!-- 页脚 -->
-      <Transition name="fade" mode="out-in">
-        <Footer class="f-ter" v-show="!store.backgroundShow && !store.setOpenState" />
-      </Transition>
+  <div id="top" class="site-shell">
+    <header class="site-header page-width">
+      <a class="brand" href="#top" aria-label="返回首页顶部">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>{{ siteName }}</span>
+      </a>
+      <nav class="header-nav" aria-label="页面导航">
+        <a href="#sites">站点导航</a>
+        <button type="button" @click="contactOpen = true">联系我</button>
+      </nav>
+    </header>
+
+    <main class="page-width">
+      <section class="hero" aria-label="个人主页">
+        <MainLeft @open-contact="contactOpen = true" />
+        <MainRight />
+      </section>
+      <Links />
     </main>
-  </Transition>
+
+    <Footer />
+    <ContactPanel :open="contactOpen" @close="contactOpen = false" />
+  </div>
 </template>
 
 <script setup>
-import { helloInit, checkDays } from "@/utils/getTime.js";
-import { HamburgerButton, CloseSmall } from "@icon-park/vue-next";
-import { mainStore } from "@/store";
-import { Icon } from "@vicons/utils";
-import Loading from "@/components/Loading.vue";
+import { checkDays } from "@/utils/getTime.js";
 import MainLeft from "@/views/Main/Left.vue";
 import MainRight from "@/views/Main/Right.vue";
-import Background from "@/components/Background.vue";
+import Links from "@/components/Links.vue";
 import Footer from "@/components/Footer.vue";
-import Box from "@/views/Box/index.vue";
-import MoreSet from "@/views/MoreSet/index.vue";
-import cursorInit from "@/utils/cursor.js";
-import config from "@/../package.json";
+import ContactPanel from "@/components/ContactPanel.vue";
 
-const store = mainStore();
-
-// 页面宽度
-const getWidth = () => {
-  store.setInnerWidth(window.innerWidth);
-};
-
-// 加载完成事件
-const loadComplete = () => {
-  nextTick(() => {
-    // 欢迎提示
-    helloInit();
-    // 默哀模式
-    checkDays();
-  });
-};
-
-// 监听宽度变化
-watch(
-  () => store.innerWidth,
-  (value) => {
-    if (value < 721) {
-      store.boxOpenState = false;
-      store.setOpenState = false;
-    }
-  },
-);
+const siteName = import.meta.env.VITE_SITE_NAME || "flying 主页";
+const contactOpen = ref(false);
 
 onMounted(() => {
-  // 自定义鼠标
-  cursorInit();
-
-  // 屏蔽右键
-  document.oncontextmenu = () => {
-    ElMessage({
-      message: "为了浏览体验，本站禁用右键",
-      grouping: true,
-      duration: 2000,
-    });
-    return false;
-  };
-
-  // 鼠标中键事件
-  window.addEventListener("mousedown", (event) => {
-    if (event.button == 1) {
-      store.backgroundShow = !store.backgroundShow;
-      ElMessage({
-        message: `已${store.backgroundShow ? "开启" : "退出"}壁纸展示状态`,
-        grouping: true,
-      });
-    }
-  });
-
-  // 监听当前页面宽度
-  getWidth();
-  window.addEventListener("resize", getWidth);
-
-  // 控制台输出
-  const styleTitle1 = "font-size: 20px;font-weight: 600;color: rgb(244,167,89);";
-  const styleTitle2 = "font-size:12px;color: rgb(244,167,89);";
-  const styleContent = "color: rgb(30,152,255);";
-  const title1 = "無名の主页";
-  const title2 = `
- _____ __  __  _______     ____     __
-|_   _|  \\/  |/ ____\\ \\   / /\\ \\   / /
-  | | | \\  / | (___  \\ \\_/ /  \\ \\_/ /
-  | | | |\\/| |\\___ \\  \\   /    \\   /
- _| |_| |  | |____) |  | |      | |
-|_____|_|  |_|_____/   |_|      |_|`;
-  const content = `\n\n版本: ${config.version}\n主页: ${config.home}\nGithub: ${config.github}`;
-  console.info(`%c${title1} %c${title2} %c${content}`, styleTitle1, styleTitle2, styleContent);
-});
-
-onBeforeUnmount(() => {
-  window.removeEventListener("resize", getWidth);
+  checkDays();
 });
 </script>
 
 <style lang="scss" scoped>
-#main {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  transform: scale(1.2);
-  transition: transform 0.3s;
-  animation: fade-blur-main-in 0.65s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-  animation-delay: 0.5s;
-  .container {
-    width: 100%;
-    height: 100vh;
-    margin: 0 auto;
-    padding: 0 0.5vw;
-    .all {
-      width: 100%;
-      height: 100%;
-      padding: 0 0.75rem;
-      display: flex;
-      flex-direction: row;
-      justify-content: center;
-      align-items: center;
-    }
-    .more {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: #00000080;
-      backdrop-filter: blur(20px);
-      z-index: 2;
-      animation: fade 0.5s;
-    }
-    @media (max-width: 1200px) {
-      padding: 0 2vw;
-    }
+.site-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.site-header {
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.brand-mark {
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 0 5px var(--accent-soft);
+}
+
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  font-size: 0.85rem;
+
+  a,
+  button {
+    position: relative;
+    color: var(--muted);
+    transition: color 180ms ease;
   }
-  .menu {
+
+  a::after,
+  button::after {
+    content: "";
     position: absolute;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    top: 84%;
-    left: calc(50% - 28px);
-    width: 56px;
-    height: 34px;
-    background: rgb(0 0 0 / 20%);
-    backdrop-filter: blur(10px);
-    border-radius: 6px;
-    transition: transform 0.3s;
-    animation: fade 0.5s;
-    &:active {
-      transform: scale(0.95);
-    }
-    .i-icon {
-      transform: translateY(2px);
-    }
-    @media (min-width: 721px) {
-      display: none;
+    right: 0;
+    bottom: -7px;
+    left: 0;
+    height: 1px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 180ms ease;
+  }
+
+  a:hover,
+  button:hover {
+    color: var(--ink);
+
+    &::after {
+      transform: scaleX(1);
+      transform-origin: left;
     }
   }
-  @media (max-height: 720px) {
-    overflow-y: auto;
-    overflow-x: hidden;
-    .container {
-      height: 721px;
-      .more {
-        height: 721px;
-        width: calc(100% + 6px);
-      }
-      @media (min-width: 391px) {
-        // w 1201px ~ max
-        padding-left: 0.7vw;
-        padding-right: 0.25vw;
-        @media (max-width: 1200px) { // w 1101px ~ 1280px
-          padding-left: 2.3vw;
-          padding-right: 1.75vw;
-        }
-        @media (max-width: 1100px) { // w 993px ~ 1100px
-          padding-left: 2vw;
-          padding-right: calc(2vw - 6px);
-        }
-        @media (max-width: 992px) { // w 901px ~ 992px
-          padding-left: 2.3vw;
-          padding-right: 1.7vw;
-        }
-        @media (max-width: 900px) { // w 391px ~ 900px
-          padding-left: 2vw;
-          padding-right: calc(2vw - 6px);
-        }
-      }
-    }
-    .menu {
-      top: 605.64px; // 721px * 0.84
-      left: 170.5px; // 391 * 0.5 - 25px
-      @media (min-width: 391px) {
-        left: calc(50% - 25px);
-      }
-    }
-    .f-ter {
-      top: 675px; // 721px - 46px
-      @media (min-width: 391px) {
-        padding-left: 6px;
-      }
-    }
+}
+
+main {
+  flex: 1;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
+  gap: clamp(48px, 7vw, 104px);
+  align-items: stretch;
+  padding: clamp(56px, 8vw, 104px) 0 clamp(64px, 8vw, 96px);
+}
+
+@media (max-width: 960px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
+    gap: 40px;
   }
-  @media (max-width: 390px) {
-    overflow-x: auto;
-    .container {
-      width: 391px;
-    }
-    .menu {
-      left: 167.5px; // 391px * 0.5 - 28px
-    }
-    .f-ter {
-      width: 391px;
-    }
-    @media (min-height: 721px) {
-      overflow-y: hidden;
-    }
+}
+
+@media (max-width: 780px) {
+  .site-header {
+    min-height: 76px;
+  }
+
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 56px;
+    padding: 48px 0 64px;
+  }
+}
+
+@media (max-width: 480px) {
+  .site-header {
+    gap: 16px;
+  }
+
+  .brand {
+    max-width: 52%;
+    line-height: 1.4;
+  }
+
+  .header-nav {
+    gap: 18px;
+    font-size: 0.8rem;
+  }
+
+  .hero {
+    gap: 48px;
+    padding-top: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-mark {
+    box-shadow: none;
   }
 }
 </style>

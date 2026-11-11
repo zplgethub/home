@@ -1,41 +1,31 @@
 <template>
-  <footer id="footer" :class="store.footerBlur ? 'blur' : null">
+  <footer class="site-footer page-width">
     <Transition name="fade" mode="out-in">
-      <div v-if="!store.playerState || !store.playerLrcShow" class="power">
-        <span>
-          <span :class="startYear < fullYear ? 'c-hidden' : 'hidden'">Copyright&nbsp;</span>
-          &copy;
-          <span v-if="startYear < fullYear"
-            class="site-start">
-            {{ startYear }}
-            -
+      <div v-if="store.playerState && store.playerLrcShow" class="lrc">
+        <music-one theme="filled" size="16" fill="currentColor" />
+        <span class="lrc-text text-hidden">{{ store.getPlayerLrc }}</span>
+        <music-one theme="filled" size="16" fill="currentColor" />
+      </div>
+      <div v-else class="footer-content">
+        <p>
+          ©
+          <span v-if="startYear && startYear < fullYear">{{ startYear }}–</span>{{ fullYear }}
+          <a :href="siteUrl" target="_blank" rel="noopener noreferrer">{{ siteAuthor }}</a>
+        </p>
+        <p class="credits">
+          <span>
+            Made by
+            <a :href="config.github" target="_blank" rel="noopener noreferrer">{{ config.author }}</a>
           </span>
-          {{ fullYear }}
-          <a :href="siteUrl">{{ siteAuthor }}</a>
-        </span>
-        <!-- 以下信息请不要修改哦 -->
-        <span class="hidden">
-          &amp;&nbsp;Made&nbsp;by
-          <a :href="config.github" target="_blank">
-            {{ config.author }}
-          </a>
-        </span>
-        <!-- 站点备案 -->
-        <span>
-          &amp;
-          <a v-if="siteIcp" href="https://beian.miit.gov.cn" target="_blank">
+          <a
+            v-if="siteIcp"
+            href="https://beian.miit.gov.cn"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             {{ siteIcp }}
           </a>
-        </span>
-      </div>
-      <div v-else class="lrc">
-        <Transition name="fade" mode="out-in">
-          <div class="lrc-all" :key="store.getPlayerLrc">
-            <music-one theme="filled" size="18" fill="#efefef" />
-            <span class="lrc-text text-hidden" v-html="store.getPlayerLrc" />
-            <music-one theme="filled" size="18" fill="#efefef" />
-          </div>
-        </Transition>
+        </p>
       </div>
     </Transition>
   </footer>
@@ -48,89 +38,76 @@ import config from "@/../package.json";
 
 const store = mainStore();
 const fullYear = new Date().getFullYear();
-
-// 加载配置数据
-// const siteStartDate = ref(import.meta.env.VITE_SITE_START);
-const startYear = ref(
-  import.meta.env.VITE_SITE_START?.length >= 4 ? 
-  import.meta.env.VITE_SITE_START.substring(0, 4) : null
-);
-const siteIcp = ref(import.meta.env.VITE_SITE_ICP);
-const siteAuthor = ref(import.meta.env.VITE_SITE_AUTHOR);
+const startYear = import.meta.env.VITE_SITE_START?.length >= 4
+  ? Number(import.meta.env.VITE_SITE_START.substring(0, 4))
+  : null;
+const siteIcp = import.meta.env.VITE_SITE_ICP;
+const siteAuthor = import.meta.env.VITE_SITE_AUTHOR || "flying";
 const siteUrl = computed(() => {
-  const url = import.meta.env.VITE_SITE_URL;
-  if (!url) return "https://www.imsyy.top";
-  // 判断协议前缀
-  if (!url.startsWith("http://") && !url.startsWith("https://")) {
-    return "//" + url;
-  }
-  return url;
+  const url = import.meta.env.VITE_SITE_URL || "xzqf.nyc.mn";
+  return url.startsWith("http://") || url.startsWith("https://") ? url : `https://${url}`;
 });
 </script>
 
 <style lang="scss" scoped>
-#footer {
+.site-footer {
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  padding: 24px 0;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.footer-content {
   width: 100%;
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 46px;
-  line-height: 46px;
-  text-align: center;
-  z-index: 0;
-  font-size: 14px;
-  // 文字不换行
-  word-break: keep-all;
-  white-space: nowrap;
-  .power {
-    animation: fade 0.3s;
-  }
-  .lrc {
-    padding: 0 20px;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    .lrc-all {
-      width: 98%;
-      display: flex;
-      flex-direction: row;
-      justify-content: center;
-      align-items: center;
-      .lrc-text {
-        margin: 0 8px;
-      }
-      .i-icon {
-        width: 18px;
-        height: 18px;
-        display: inherit;
-      }
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+
+  a {
+    color: var(--ink);
+    transition: color 180ms ease;
+
+    &:hover {
+      color: var(--accent);
     }
   }
-  &.blur {
-    backdrop-filter: blur(10px);
-    background: rgb(0 0 0 / 25%);
-    font-size: 16px;
+}
+
+.credits {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 20px;
+  text-align: right;
+}
+
+.lrc {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--accent);
+
+  .lrc-text {
+    max-width: min(70vw, 680px);
   }
-  .fade-enter-active,
-  .fade-leave-active {
-    transition: opacity 0.15s ease-in-out;
+}
+
+@media (max-width: 620px) {
+  .footer-content {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
   }
-  @media (max-width: 720px) {
-    font-size: 0.9rem;
-    &.blur {
-      font-size: 0.9rem;
-    }
-  }
-  @media (max-width: 560px) {
-    .c-hidden {
-      display: none;
-    }
-  }
-  @media (max-width: 480px) {
-    .hidden {
-      display: none;
-    }
+
+  .credits {
+    justify-content: flex-start;
+    text-align: left;
   }
 }
 </style>

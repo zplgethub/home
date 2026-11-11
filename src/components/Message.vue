@@ -1,193 +1,165 @@
 <template>
-  <!-- 基本信息 -->
   <div class="message">
-    <!-- Logo -->
-    <div class="logo">
-      <img class="logo-img" :src="siteLogo" alt="logo" />
-      <div :class="{ name: true, 'text-hidden': true, long: siteUrl[0].length >= 6 }">
-        <span class="bg">{{ siteUrl[0] }}</span>
-        <span class="sm">.{{ siteUrl[1] }}</span>
+    <p class="section-kicker">Personal homepage</p>
+
+    <div class="identity">
+      <div class="title-row">
+        <h1>{{ siteAuthor }}</h1>
+        <img class="avatar" :src="siteLogo" :alt="`${siteAuthor} 的头像`" />
       </div>
+      <a class="site-url" :href="siteLink" target="_blank" rel="noopener noreferrer">
+        {{ siteUrl }}
+        <span aria-hidden="true">↗</span>
+      </a>
     </div>
-    <!-- 简介 -->
-    <div class="description cards" @click="changeBox">
-      <div class="content">
-        <Icon size="16">
-          <QuoteLeft />
-        </Icon>
-        <Transition name="fade" mode="out-in">
-          <div :key="descriptionText.hello + descriptionText.text" class="text">
-            <p>{{ descriptionText.hello }}</p>
-            <p>{{ descriptionText.text }}</p>
-          </div>
-        </Transition>
-        <Icon size="16">
-          <QuoteRight />
-        </Icon>
-      </div>
+
+    <div class="description">
+      <p class="hello">{{ descriptionHello }}</p>
+      <p class="text">{{ descriptionText }}</p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { Icon } from "@vicons/utils";
-import { QuoteLeft, QuoteRight } from "@vicons/fa";
-import { Error } from "@icon-park/vue-next";
-import { mainStore } from "@/store";
-const store = mainStore();
+const siteLogo = import.meta.env.VITE_SITE_MAIN_LOGO || "/images/icon/logo.png";
+const siteAuthor = import.meta.env.VITE_SITE_AUTHOR || "flying";
+const descriptionHello = import.meta.env.VITE_DESC_HELLO || "欢迎你的访问！";
+const descriptionText = import.meta.env.VITE_DESC_TEXT || "flying 的主页小屋";
 
-// 主页站点logo
-const siteLogo = import.meta.env.VITE_SITE_MAIN_LOGO;
-// 站点链接
 const siteUrl = computed(() => {
-  const url = import.meta.env.VITE_SITE_URL;
-  if (!url) return "imsyy.top".split(".");
-  // 判断协议前缀
-  if (url.startsWith("http://") || url.startsWith("https://")) {
-    const urlFormat = url.replace(/^(https?:\/\/)/, "");
-    return urlFormat.split(".");
-  }
-  return url.split(".");
+  const url = import.meta.env.VITE_SITE_URL || "xzqf.nyc.mn";
+  return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
 });
 
-// 简介区域文字
-const descriptionText = reactive({
-  hello: import.meta.env.VITE_DESC_HELLO,
-  text: import.meta.env.VITE_DESC_TEXT,
+const siteLink = computed(() => {
+  const url = import.meta.env.VITE_SITE_URL || "xzqf.nyc.mn";
+  return url.startsWith("http://") || url.startsWith("https://") ? url : `https://${url}`;
 });
-
-// 切换右侧功能区
-const changeBox = () => {
-  if (store.getInnerWidth >= 721) {
-    store.boxOpenState = !store.boxOpenState;
-  } else {
-    ElMessage({
-      message: "当前页面宽度不足以开启盒子",
-      grouping: true,
-      icon: h(Error, {
-        theme: "filled",
-        fill: "#efefef",
-      }),
-    });
-  }
-};
-
-// 监听状态变化
-watch(
-  () => store.boxOpenState,
-  (value) => {
-    if (value) {
-      descriptionText.hello = import.meta.env.VITE_DESC_HELLO_OTHER;
-      descriptionText.text = import.meta.env.VITE_DESC_TEXT_OTHER;
-    } else {
-      descriptionText.hello = import.meta.env.VITE_DESC_HELLO;
-      descriptionText.text = import.meta.env.VITE_DESC_TEXT;
-    }
-  },
-);
 </script>
 
 <style lang="scss" scoped>
 .message {
-  .logo {
-    display: flex;
-    flex-direction: row;
+  max-width: 680px;
+}
+
+.identity {
+  margin-top: clamp(32px, 5vw, 60px);
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(20px, 3vw, 36px);
+
+  h1 {
+    max-width: 100%;
+    font-family: Georgia, "Times New Roman", "Songti SC", serif;
+    font-size: clamp(4.8rem, 9vw, 8.6rem);
+    font-weight: 400;
+    letter-spacing: -0.065em;
+    line-height: 0.92;
+    overflow-wrap: anywhere;
+  }
+}
+
+.avatar {
+  flex: none;
+  width: clamp(58px, 6vw, 76px);
+  height: clamp(58px, 6vw, 76px);
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  filter: saturate(0.75);
+}
+
+.site-url {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 26px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--muted);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  transition:
+    border-color 180ms ease,
+    color 180ms ease;
+
+  &:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+}
+
+.description {
+  max-width: 470px;
+  margin-top: clamp(48px, 7vw, 76px);
+  padding-left: 24px;
+  border-left: 2px solid var(--accent);
+}
+
+.hello {
+  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-size: clamp(1.55rem, 2.6vw, 2.15rem);
+  line-height: 1.35;
+}
+
+.text {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.98rem;
+  line-height: 1.9;
+}
+
+@media (max-width: 960px) {
+  .title-row {
+    align-items: flex-start;
+    flex-direction: column-reverse;
+  }
+}
+
+@media (max-width: 780px) {
+  .message {
+    max-width: none;
+  }
+
+  .title-row {
     align-items: center;
-    animation: fade 0.5s;
-    max-width: 460px;
-    .logo-img {
-      border-radius: 50%;
-      width: 120px;
-    }
-    .name {
-      width: 100%;
-      padding-left: 22px;
-      transform: translateY(-8px);
-      font-family: "Pacifico-Regular";
-
-      .bg {
-        font-size: 5rem;
-      }
-
-      .sm {
-        margin-left: 6px;
-        font-size: 2rem;
-        @media (min-width: 721px) and (max-width: 789px) {
-          display: none;
-        }
-      }
-    }
-    @media (max-width: 768px) {
-      .logo-img {
-        width: 100px;
-      }
-      .name {
-        height: 128px;
-        .bg {
-          font-size: 4.5rem;
-        }
-      }
-    }
-
-    @media (max-width: 720px) {
-      max-width: 100%;
-    }
+    flex-direction: row;
   }
 
   .description {
-    padding: 1rem;
-    margin-top: 3.5rem;
-    max-width: 460px;
-    animation: fade 0.5s;
+    margin-top: 48px;
+  }
+}
 
-    .content {
-      display: flex;
-      justify-content: space-between;
+@media (max-width: 480px) {
+  .identity {
+    margin-top: 32px;
+  }
 
-      .text {
-        margin: 0.75rem 1rem;
-        line-height: 2rem;
-        margin-right: auto;
-        transition: opacity 0.2s;
+  .title-row {
+    gap: 18px;
 
-        p {
-          &:nth-of-type(1) {
-            font-family: "Pacifico-Regular";
-          }
-        }
-      }
-
-      .xicon:nth-of-type(2) {
-        align-self: flex-end;
-      }
-    }
-    @media (max-width: 720px) {
-      max-width: 100%;
-      pointer-events: none;
+    h1 {
+      font-size: clamp(4rem, 21vw, 6rem);
     }
   }
-  // @media (max-width: 390px) {
-  //   .logo {
-  //     flex-direction: column;
-  //     .logo-img {
-  //       display: none;
-  //     }
-  //     .name {
-  //       margin-left: 0;
-  //       height: auto;
-  //       transform: none;
-  //       text-align: center;
-  //       .bg {
-  //         font-size: 3.5rem;
-  //       }
-  //       .sm {
-  //         font-size: 1.4rem;
-  //       }
-  //     }
-  //   }
-  //   .description {
-  //     margin-top: 2.5rem;
-  //   }
-  // }
+
+  .avatar {
+    width: 52px;
+    height: 52px;
+  }
+
+  .site-url {
+    margin-top: 22px;
+  }
+
+  .description {
+    margin-top: 40px;
+    padding-left: 18px;
+  }
 }
 </style>
