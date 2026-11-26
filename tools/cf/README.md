@@ -92,6 +92,17 @@
 - 目标邮箱为账号邮箱（foxmail），且存在 **catch-all（全匹配）规则**。
 - 因此 `任意前缀@xzqf.nyc.mn` 都会转发到目标邮箱，无需逐个建规则。
 
+### 3.7 私有文档通用机制（docs）
+
+- 专用域名 `docs.xzqf.nyc.mn`，DNS 为占位 AAAA（`100::`）+ 橙云，路由到同一个 Worker `img-up`
+- **整站 Access**：应用 `docs`，策略仅允许账号邮箱（`Flying_zh@foxmail.com`）OTP 登录，会话 24 小时
+- Worker 在该域名下**只允许读取 `private/` 前缀的对象**，不写边缘缓存（`private, no-cache`）
+- 上传时 `name` 以 `private/` 开头即进入私有区：
+  - 对象 key 变为 `private/<时间戳>-<随机串>-<文件名>`
+  - 返回的 `url` 自动是 `https://docs.xzqf.nyc.mn/<key>`
+- **双重隔离**：`up.xzqf.nyc.mn/f/private/...` 一律 404；`/list` 与图库 `/g` 也会过滤掉 `private/` 对象
+- 因此任何新文档只需按此规则上传，即自动获得“公链 + 邮箱验证码”保护，无需再建 Access 应用
+
 ---
 
 ## 4. 日常修改手册

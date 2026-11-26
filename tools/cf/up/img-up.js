@@ -156,6 +156,22 @@ export default {
     const authToken = req.headers.get("x-upload-token") || url.searchParams.get("token");
     const authed = !!env.UPLOAD_TOKEN && authToken === env.UPLOAD_TOKEN;
 
+    // 私有文档域：整站由 Cloudflare Access 保护，仅可读取 private/ 前缀的对象
+    if (url.hostname === "docs.xzqf.nyc.mn") {
+      if (url.pathname === "/")
+        return new Response("private docs: /<key>", { headers: { "content-type": "text/plain; charset=utf-8" } });
+      const key = decodeURIComponent(url.pathname.slice(1));
+      if (!key.startsWith("private/")) return json({ error: "not found" }, 404);
+      const signed = await signRequest(env, "GET", key, null);
+      const obj = await fetch(signed.url, { headers: signed.headers });
+      if (!obj.ok) return json({ error: "not found" }, 404);
+      const out = new Headers();
+      out.set("content-type", obj.headers.get("content-type") || "application/octet-stream");
+      out.set("cache-control", "private, no-cache");
+      out.set("x-content-type-options", "nosniff");
+      return new Response(req.method === "HEAD" ? null : obj.body, { status: 200, headers: out });
+    }
+
     if (req.method === "GET" && url.pathname === "/")
       return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8" } });
     if (req.method === "GET" && (url.pathname === "/g" || url.pathname === "/gallery"))
@@ -181,7 +197,7 @@ export default {
           const key = (/<Key>(.*?)<\/Key>/.exec(b) || [])[1];
           const size = Number((/<Size>(\d+)<\/Size>/.exec(b) || [])[1] || 0);
           const lm = (/<LastModified>(.*?)<\/LastModified>/.exec(b) || [])[1] || "";
-          if (key) items.push({ key, size, lastModified: lm, url: `${url.origin}/f/${key}` });
+          if (key && !key.startsWith("private/")) items.push({ key, size, lastModified: lm, url: `${url.origin}/f/${key}` });
         }
         const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
         let next = (/<NextContinuationToken>(.*?)<\/NextContinuationToken>/.exec(xml) || [])[1];
@@ -210,19 +226,26 @@ export default {
       if (!authed) return json({ error: "invalid token" }, 401);
       const ip = req.headers.get("cf-connecting-ip") || "unknown";
       if (!rateAllow(ip, 10, 60000)) return json({ error: "rate limit: max 10 uploads/min" }, 429);
-      const name = (url.searchParams.get("name") || "file").replace(/[^\w.\-]+/g, "_").slice(-80);
+      const rawName = url.searchParams.get("name") || "file";
+      const isPrivate = rawName.startsWith("private/");
+      const name = (isPrivate ? rawName.slice(8) : rawName).replace(/[^\w.\-]+/g, "_").slice(-80);
       const ct = req.headers.get("content-type") || "application/octet-stream";
       const body = await req.arrayBuffer();
       if (!body.byteLength) return json({ error: "empty body" }, 400);
       if (body.byteLength > 25 * 1024 * 1024) return json({ error: "file too large (max 25MB)" }, 413);
-      const key = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${name}`;
+      const key = `${isPrivate ? "private/" : ""}${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${name}`;
       const signed = await signRequest(env, "PUT", key, body);
       const put = await fetch(signed.url, { method: "PUT", headers: { ...signed.headers, "content-type": ct }, body });
       if (!put.ok) {
         const t = await put.text();
         return json({ error: `B2 ${put.status}: ${t.slice(0, 200)}` }, 502);
       }
-      return json({ ok: true, key, url: `${url.origin}/f/${key}` });
+      return json({
+        ok: true,
+        key,
+        protected: isPrivate,
+        url: isPrivate ? `https://docs.xzqf.nyc.mn/${key}` : `${url.origin}/f/${key}`,
+      });
     }
 
     if ((req.method === "GET" || req.method === "HEAD") && url.pathname.startsWith("/f/")) {
@@ -232,6 +255,7 @@ export default {
       if (hit) return hit;
       const key = url.pathname.slice(3);
       if (!key) return json({ error: "missing key" }, 400);
+      if (key.startsWith("private/")) return json({ error: "not found" }, 404);
       const signed = await signRequest(env, "GET", key, null);
       const headers = { ...signed.headers };
       const range = req.headers.get("range");
