@@ -92,18 +92,18 @@
 - 目标邮箱为账号邮箱（foxmail），且存在 **catch-all（全匹配）规则**。
 - 因此 `任意前缀@xzqf.nyc.mn` 都会转发到目标邮箱，无需逐个建规则。
 
-### 3.7 私有文档通用机制（docs）
+### 3.7 文档中心（docs，公开/私有分级）
 
-- **统一入口：`https://docs.xzqf.nyc.mn/`**，根路径直接返回文档中心页面
-- 文档访问形式为 `https://docs.xzqf.nyc.mn/<文件名>`，Worker 自动映射到 B2 的 `private/<文件名>`
-- 专用域名 `docs.xzqf.nyc.mn`，DNS 为占位 AAAA（`100::`）+ 橙云，路由到同一个 Worker `img-up`
-- **整站 Access**：应用 `docs`，策略允许 `Flying_zh@foxmail.com`、`zh_octopus@qq.com` 两个邮箱 OTP 登录，会话 24 小时
-- Worker 在该域名下**只读取 `private/` 前缀的对象**，不写边缘缓存（`private, no-cache`）
-- 上传时 `name` 以 `private/` 开头即进入私有区：
-  - key 固定为 `private/<文件名>`，**不加时间戳、同名覆盖**，链接长期不变
-  - 返回的 `url` 是 `https://docs.xzqf.nyc.mn/private/<文件名>`，也可省略前缀直接访问
-- **双重隔离**：`up.xzqf.nyc.mn/f/private/...` 一律 404；`/list` 与图库 `/g` 过滤掉 `private/` 对象
-- 新增文档后，把链接追加到文档中心页面（源文件 `private/docs-index.html`）并重新上传一次即可
+- **统一入口：`https://docs.xzqf.nyc.mn/`**，公开可访问，返回文档中心页面（索引文件 `public/docs-index.html`）
+- 路径分级：
+  - `https://docs.xzqf.nyc.mn/public/<文件名>` → **公开文档**，任何人可读，缓存 1 小时
+  - `https://docs.xzqf.nyc.mn/private/<文件名>` → **私有文档**，Access 拦截，仅 `Flying_zh@foxmail.com`、`zh_octopus@qq.com` 可 OTP 登录，会话 24 小时，不写缓存
+- Access 应用为 `docs-private`，**作用域只到 `docs.xzqf.nyc.mn/private` 路径**，因此入口和公开文档不需要登录
+- 上传时 `name` 以 `public/` 或 `private/` 开头即进入文档区：
+  - key 固定为 `<级别>/<文件名>`，**不加时间戳、同名覆盖**，链接长期不变
+  - 返回的 `url` 自动指向 `docs.xzqf.nyc.mn`
+- **隔离**：`up.xzqf.nyc.mn` 对 `private/`、`public/` 前缀一律 404，`/list` 与图库 `/g` 也会过滤，文档只在 docs 域出现
+- 新增文档后，把链接追加到索引页并重新上传 `public/docs-index.html`
 - 文件名用英文小写达意命名（如 `home-redesign-plan.md`），中文会被清洗为下划线
 
 ---

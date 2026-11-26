@@ -159,14 +159,14 @@ export default {
     // 私有文档域：整站由 Cloudflare Access 保护，仅可读取 private/ 前缀的对象
     if (url.hostname === "docs.xzqf.nyc.mn") {
       let key = decodeURIComponent(url.pathname.slice(1));
-      if (!key) key = "private/docs-index.html";
-      if (!key.startsWith("private/")) key = `private/${key}`;
+      if (!key) key = "public/docs-index.html";
+      if (!/^(private|public)\//.test(key)) return json({ error: "not found" }, 404);
       const signed = await signRequest(env, "GET", key, null);
       const obj = await fetch(signed.url, { headers: signed.headers });
       if (!obj.ok) return json({ error: "not found" }, 404);
       const out = new Headers();
       out.set("content-type", obj.headers.get("content-type") || "application/octet-stream");
-      out.set("cache-control", "private, no-cache");
+      out.set("cache-control", key.startsWith("private/") ? "private, no-cache" : "public, max-age=3600");
       out.set("x-content-type-options", "nosniff");
       return new Response(req.method === "HEAD" ? null : obj.body, { status: 200, headers: out });
     }
@@ -196,7 +196,7 @@ export default {
           const key = (/<Key>(.*?)<\/Key>/.exec(b) || [])[1];
           const size = Number((/<Size>(\d+)<\/Size>/.exec(b) || [])[1] || 0);
           const lm = (/<LastModified>(.*?)<\/LastModified>/.exec(b) || [])[1] || "";
-          if (key && !key.startsWith("private/")) items.push({ key, size, lastModified: lm, url: `${url.origin}/f/${key}` });
+          if (key && !/^(private|public)\//.test(key)) items.push({ key, size, lastModified: lm, url: `${url.origin}/f/${key}` });
         }
         const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
         let next = (/<NextContinuationToken>(.*?)<\/NextContinuationToken>/.exec(xml) || [])[1];
@@ -226,13 +226,14 @@ export default {
       const ip = req.headers.get("cf-connecting-ip") || "unknown";
       if (!rateAllow(ip, 10, 60000)) return json({ error: "rate limit: max 10 uploads/min" }, 429);
       const rawName = url.searchParams.get("name") || "file";
-      const isPrivate = rawName.startsWith("private/");
-      const name = (isPrivate ? rawName.slice(8) : rawName).replace(/[^\w.\-]+/g, "_").slice(-80);
+      const m = /^(private|public)\//.exec(rawName);
+      const scope = m ? m[1] : "";
+      const name = (m ? rawName.slice(scope.length + 1) : rawName).replace(/[^\w.\-]+/g, "_").slice(-80);
       const ct = req.headers.get("content-type") || "application/octet-stream";
       const body = await req.arrayBuffer();
       if (!body.byteLength) return json({ error: "empty body" }, 400);
       if (body.byteLength > 25 * 1024 * 1024) return json({ error: "file too large (max 25MB)" }, 413);
-      const key = isPrivate ? `private/${name}` : `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${name}`;
+      const key = scope ? `${scope}/${name}` : `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${name}`;
       const signed = await signRequest(env, "PUT", key, body);
       const put = await fetch(signed.url, { method: "PUT", headers: { ...signed.headers, "content-type": ct }, body });
       if (!put.ok) {
@@ -242,8 +243,8 @@ export default {
       return json({
         ok: true,
         key,
-        protected: isPrivate,
-        url: isPrivate ? `https://docs.xzqf.nyc.mn/${key}` : `${url.origin}/f/${key}`,
+        protected: scope === "private",
+        url: scope ? `https://docs.xzqf.nyc.mn/${key}` : `${url.origin}/f/${key}`,
       });
     }
 
@@ -254,7 +255,7 @@ export default {
       if (hit) return hit;
       const key = url.pathname.slice(3);
       if (!key) return json({ error: "missing key" }, 400);
-      if (key.startsWith("private/")) return json({ error: "not found" }, 404);
+      if (/^(private|public)\//.test(key)) return json({ error: "not found" }, 404);
       const signed = await signRequest(env, "GET", key, null);
       const headers = { ...signed.headers };
       const range = req.headers.get("range");
