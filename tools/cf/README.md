@@ -16,7 +16,22 @@
 | `verify.xzqf.nyc.mn` | Cloudflare Tunnel → ECS :8080 | Access 邮箱验证码 | 仅允许 `@qq.com`、`@139.com` |
 | `img.xzqf.nyc.mn` | Cloudflare Pages 项目 `xzqf-img` | 无 | 静态图床，命令行 `upimg` 部署 |
 | `up.xzqf.nyc.mn` | Worker `img-up` → B2 私有桶 | 上传密钥 | 手机上传、图库、删除、直链 |
-| `api.xzqf.nyc.mn` | Worker `api-demo` | 无 | 示例 JSON 接口 |
+| `api.xzqf.nyc.mn` | Worker `api-demo` | 无 | 常用小接口：状态聚合 / 短链 / IP / 密码 / 回显 |
+
+**api 接口一览**（源码 `tools/cf/api-demo.js`，仓库 `trae/cf/api-demo.js`）：
+
+| 路径 | 用途 |
+|---|---|
+| `/` | 接口目录 |
+| `/status` | 站点健康状态与耗时（home/www/demo/verify/img） |
+| `/go/<key>` | 短链跳转，key 在源码 `LINKS` 中维护 |
+| `/ip` | 访客 IP、地区、CF 节点 |
+| `/pwd?len=16` | 随机密码（8–64 位） |
+| `/uuid` | 随机 UUID |
+| `/echo` | 回显请求头/body，调试 webhook |
+| `/health` | 自身健康检查 |
+
+注意：Worker 不能回环调用同 Zone 的其他 Worker 域名（up/docs/api），所以 `/status` 不检测它们；`demo` 显示 502 通常表示 ECS 的 8080 服务未运行。
 
 服务器：华为云 ECS（2C2G，40G 盘，100GB/月出网流量），SSH 端口 `22222`，登录用户 `zzz`，Ubuntu 24.04。
 
