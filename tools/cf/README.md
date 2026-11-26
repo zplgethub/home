@@ -95,7 +95,7 @@
 ### 3.7 私有文档通用机制（docs）
 
 - 专用域名 `docs.xzqf.nyc.mn`，DNS 为占位 AAAA（`100::`）+ 橙云，路由到同一个 Worker `img-up`
-- **整站 Access**：应用 `docs`，策略仅允许账号邮箱（`Flying_zh@foxmail.com`）OTP 登录，会话 24 小时
+- **整站 Access**：应用 `docs`，策略允许 `Flying_zh@foxmail.com`、`zh_octopus@qq.com` 两个邮箱 OTP 登录，会话 24 小时
 - Worker 在该域名下**只允许读取 `private/` 前缀的对象**，不写边缘缓存（`private, no-cache`）
 - 上传时 `name` 以 `private/` 开头即进入私有区：
   - 对象 key 变为 `private/<时间戳>-<随机串>-<文件名>`
