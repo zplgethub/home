@@ -227,4 +227,7 @@ ssh hw 'sudo tail -f /var/log/nginx/access.log'  # 访问日志
 
 - 沙箱：`/workspace/tools/cf/README.md`
 - ECS：`/home/zzz/tools/cf/README.md`
-- B2 私有桶：通过 `up.xzqf.nyc.mn` 上传的公开直链（Markdown + HTML 两个版本）
+- GitHub 私有仓库：`zplgethub/cf-b2-ops`
+- B2 私有桶：HTML + Markdown 两个版本，**已由 Cloudflare Access 保护**，仅授权邮箱（账号邮箱）通过验证码后可访问，未登录一律 302 到登录页
+
+> 本文档含 IP、端口、用户名等基础设施信息，不要公开传播直链；B2 上的旧公开版本已删除。
