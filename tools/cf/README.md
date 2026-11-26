@@ -103,8 +103,8 @@
   - key 固定为 `<级别>/<文件名>`，**不加时间戳、同名覆盖**，链接长期不变
   - 返回的 `url` 自动指向 `docs.xzqf.nyc.mn`
 - **隔离**：`up.xzqf.nyc.mn` 对 `private/`、`public/` 前缀一律 404，`/list` 与图库 `/g` 也会过滤，文档只在 docs 域出现
-- 新增文档后，把链接追加到索引页并重新上传 `public/docs-index.html`
-- **索引页保护**：`/delete` 拒绝删除 `public/docs-index.html`，管理页不显示其删除按钮；`/update-index` 在服务端校验内容必须是完整 HTML，非 HTML（例如错误 JSON）一律拒绝写入
+- **文档中心自动收录**：根路径由 Worker 实时列出存储桶中 `private/`、`public/` 的内容并生成页面（`no-cache`），上传即出现、删除即消失，**不再需要手工维护索引文件**
+- **索引防误删保留**：`/delete` 仍拒绝删除遗留的 `public/docs-index.html` 静态文件；`/update-index` 服务端校验仅接受完整 HTML（历史兼容接口，新流程已不调用）
 - 文件名用英文小写达意命名（如 `home-redesign-plan.md`），中文会被清洗为下划线
 
 ---
@@ -176,7 +176,7 @@ curl -X POST "https://up.xzqf.nyc.mn/delete?key=<key>" -H "x-upload-token: <上�
 
 - 粘贴一次上传密钥（存在浏览器 localStorage），之后打开即用
 - 上传：选文件 → 选级别（private/public）→ 填文件名（可留空用原文件名，自动补扩展名）→ 同名覆盖
-- 勾选“同时把文档加入索引页”会自动更新文档中心
+- 勾选“自动收录”已不需要：上传成功后文档中心立即出现该文档
 - 列表区可打开文档、删除文档（公开文档删除后缓存最长 1 小时自愈）
 - 配套接口：`/list-docs`（文档列表）、`/index-source`、`/update-index`，均需上传密钥
 - 管理页本身不需要 Access 登录，所有写操作由上传密钥保护

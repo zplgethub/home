@@ -186,7 +186,7 @@ a{color:#4B3FE3;text-decoration:none}
 <label>文件名（英文小写，不含扩展名也可，会自动补全）</label>
 <input type="text" id="name" placeholder="例如 home-redesign-plan">
 <button id="up" style="margin-top:12px">上传 / 覆盖</button>
-<label style="margin-top:14px"><input type="checkbox" id="autoindex" checked style="width:auto"> 同时把文档加入索引页</label>
+<p class="sub">文档中心会自动收录，无需手动维护索引</p>
 <div id="msg"></div>
 </div>
 
@@ -216,21 +216,10 @@ document.getElementById('up').onclick=function(){
   .then(function(r){return r.json();}).then(function(j){
     btn.disabled=false;
     if(!j.ok)return msg('失败：'+(j.error||''));
-    msg('成功：'+j.url);
-    if(document.getElementById('autoindex').checked)return addIndex(scope,name,j.url);
+    msg('成功：'+j.url+'（文档中心已自动收录）');
     load();
   }).catch(function(e){btn.disabled=false;msg('失败：'+e);});
 };
-function addIndex(scope,name,url){
-  msg('更新索引…');
-  return fetch('/index-source').then(function(r){if(!r.ok)throw new Error('读取索引失败 '+r.status);return r.text();}).then(function(html){
-    if(html.trim().charAt(0)!=='<')throw new Error('索引内容异常，已中止写入');
-    var title=name.replace(/\\.[a-z0-9]+$/i,'');
-    var item='<a class="item" href="/'+scope+'/'+name+'">\\n  <div class="t">'+title+'<span class="tag">'+scope+'</span></div>\\n  <div class="d">上传于 '+new Date().toLocaleDateString()+'</div>\\n</a>\\n\\n';
-    if(html.indexOf('/'+scope+'/'+name)===-1)html=html.replace('<footer>',item+'<footer>');
-    return fetch('/update-index',{method:'POST',headers:{'x-upload-token':tok,'content-type':'text/html; charset=utf-8'},body:html});
-  }).then(function(r){return r.json();}).then(function(j){msg(j.ok?'完成，索引已更新':'索引更新失败：'+(j.error||''));load();}).catch(function(e){msg('索引未更新：'+e.message);load();});
-}
 function load(){
   saveTok();if(!tok)return;
   fetch('/list-docs?token='+encodeURIComponent(tok)).then(function(r){return r.json();}).then(function(j){
@@ -257,6 +246,55 @@ document.getElementById('reload').onclick=load;
 if(tok)load();
 </script></body></html>`;
 
+async function listDocs(env) {
+  const items = [];
+  for (const prefix of ["private/", "public/"]) {
+    const q = `list-type=2&max-keys=1000&prefix=${encodeURIComponent(prefix)}`;
+    const signed = await signRequest(env, "GET", "", null, q);
+    const r = await fetch(signed.url, { headers: signed.headers });
+    const xml = await r.text();
+    for (const m of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+      const b = m[1];
+      const key = (/<Key>(.*?)<\/Key>/.exec(b) || [])[1];
+      const size = Number((/<Size>(\d+)<\/Size>/.exec(b) || [])[1] || 0);
+      const lm = (/<LastModified>(.*?)<\/LastModified>/.exec(b) || [])[1] || "";
+      if (key && key !== "public/docs-index.html") items.push({ key, size, lastModified: lm });
+    }
+  }
+  items.sort((a, b) => (a.lastModified < b.lastModified ? 1 : -1));
+  return items;
+}
+
+function renderDocsIndex(items) {
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const rows = items
+    .map((it) => {
+      const level = it.key.split("/")[0];
+      const name = it.key.split("/").slice(1).join("/");
+      const size = it.size > 1048576 ? (it.size / 1048576).toFixed(1) + " MB" : (it.size / 1024).toFixed(0) + " KB";
+      const date = (it.lastModified || "").slice(0, 10);
+      return `<a class="item" href="/${it.key}"><div class="t">${esc(name)}<span class="tag">${level}</span></div><div class="d">${size} · ${date}${level === "private" ? " · 需邮箱验证码" : ""}</div></a>`;
+    })
+    .join("\n");
+  return `<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>文档中心</title>
+<style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;max-width:760px;margin:0 auto;padding:40px 20px;color:#1f2937;background:#fafafa;line-height:1.7}
+h1{font-size:24px;margin:0 0 6px}p.sub{color:#6b7280;font-size:14px;margin:0 0 28px}
+a.item{display:block;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px 20px;margin-bottom:14px;text-decoration:none;color:inherit}
+a.item:hover{box-shadow:0 4px 14px rgba(0,0,0,.06)}
+.t{font-size:16px;font-weight:600;margin-bottom:4px;word-break:break-all}
+.d{font-size:13px;color:#6b7280}
+.tag{display:inline-block;font-size:12px;color:#4B3FE3;border:1px solid #4B3FE3;border-radius:999px;padding:1px 10px;margin-left:8px;vertical-align:middle}
+footer{margin-top:28px;font-size:12px;color:#9ca3af}
+</style></head><body>
+<h1>文档中心</h1>
+<p class="sub">公开文档直接阅读，私有文档需邮箱验证码 · 共 ${items.length} 篇</p>
+${rows || "<p>还没有文档</p>"}
+<footer>本页由存储桶内容自动生成，上传即出现，无需手动维护索引。</footer>
+</body></html>`;
+}
+
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
@@ -270,21 +308,7 @@ export default {
 
       if (url.pathname === "/list-docs") {
         if (!authed) return json({ error: "invalid token" }, 401);
-        const items = [];
-        for (const prefix of ["private/", "public/"]) {
-          const q = `list-type=2&max-keys=1000&prefix=${encodeURIComponent(prefix)}`;
-          const signed = await signRequest(env, "GET", "", null, q);
-          const r = await fetch(signed.url, { headers: signed.headers });
-          const xml = await r.text();
-          for (const m of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
-            const b = m[1];
-            const key = (/<Key>(.*?)<\/Key>/.exec(b) || [])[1];
-            const size = Number((/<Size>(\d+)<\/Size>/.exec(b) || [])[1] || 0);
-            const lm = (/<LastModified>(.*?)<\/LastModified>/.exec(b) || [])[1] || "";
-            if (key) items.push({ key, size, lastModified: lm });
-          }
-        }
-        items.sort((a, b) => (a.lastModified < b.lastModified ? 1 : -1));
+        const items = await listDocs(env);
         return json({ ok: true, count: items.length, items });
       }
 
@@ -316,6 +340,12 @@ export default {
         let key = decodeURIComponent(url.pathname.slice(1));
         if (!key) key = "public/docs-index.html";
         if (!/^(private|public)\//.test(key)) return json({ error: "not found" }, 404);
+        if (key === "public/docs-index.html") {
+          const items = await listDocs(env);
+          return new Response(renderDocsIndex(items), {
+            headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" },
+          });
+        }
         const signed = await signRequest(env, "GET", key, null);
         const obj = await fetch(signed.url, { headers: signed.headers });
         if (!obj.ok) return json({ error: "not found" }, 404);
