@@ -158,7 +158,6 @@ export default {
 
     // 私有文档域：整站由 Cloudflare Access 保护，仅可读取 private/ 前缀的对象
     if (url.hostname === "docs.xzqf.nyc.mn") {
-      if (url.pathname === "/") return json({ ok: true, hint: "use /list or /g" });
       let key = decodeURIComponent(url.pathname.slice(1));
       if (!key) key = "private/docs-index.html";
       if (!key.startsWith("private/")) key = `private/${key}`;
