@@ -158,10 +158,10 @@ export default {
 
     // 私有文档域：整站由 Cloudflare Access 保护，仅可读取 private/ 前缀的对象
     if (url.hostname === "docs.xzqf.nyc.mn") {
-      if (url.pathname === "/")
-        return new Response("private docs: /<key>", { headers: { "content-type": "text/plain; charset=utf-8" } });
-      const key = decodeURIComponent(url.pathname.slice(1));
-      if (!key.startsWith("private/")) return json({ error: "not found" }, 404);
+      if (url.pathname === "/") return json({ ok: true, hint: "use /list or /g" });
+      let key = decodeURIComponent(url.pathname.slice(1));
+      if (!key) key = "private/docs-index.html";
+      if (!key.startsWith("private/")) key = `private/${key}`;
       const signed = await signRequest(env, "GET", key, null);
       const obj = await fetch(signed.url, { headers: signed.headers });
       if (!obj.ok) return json({ error: "not found" }, 404);
@@ -233,7 +233,7 @@ export default {
       const body = await req.arrayBuffer();
       if (!body.byteLength) return json({ error: "empty body" }, 400);
       if (body.byteLength > 25 * 1024 * 1024) return json({ error: "file too large (max 25MB)" }, 413);
-      const key = `${isPrivate ? "private/" : ""}${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${name}`;
+      const key = isPrivate ? `private/${name}` : `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${name}`;
       const signed = await signRequest(env, "PUT", key, body);
       const put = await fetch(signed.url, { method: "PUT", headers: { ...signed.headers, "content-type": ct }, body });
       if (!put.ok) {

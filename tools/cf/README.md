@@ -94,14 +94,17 @@
 
 ### 3.7 私有文档通用机制（docs）
 
+- **统一入口：`https://docs.xzqf.nyc.mn/`**，根路径直接返回文档中心页面
+- 文档访问形式为 `https://docs.xzqf.nyc.mn/<文件名>`，Worker 自动映射到 B2 的 `private/<文件名>`
 - 专用域名 `docs.xzqf.nyc.mn`，DNS 为占位 AAAA（`100::`）+ 橙云，路由到同一个 Worker `img-up`
 - **整站 Access**：应用 `docs`，策略允许 `Flying_zh@foxmail.com`、`zh_octopus@qq.com` 两个邮箱 OTP 登录，会话 24 小时
-- Worker 在该域名下**只允许读取 `private/` 前缀的对象**，不写边缘缓存（`private, no-cache`）
+- Worker 在该域名下**只读取 `private/` 前缀的对象**，不写边缘缓存（`private, no-cache`）
 - 上传时 `name` 以 `private/` 开头即进入私有区：
-  - 对象 key 变为 `private/<时间戳>-<随机串>-<文件名>`
-  - 返回的 `url` 自动是 `https://docs.xzqf.nyc.mn/<key>`
-- **双重隔离**：`up.xzqf.nyc.mn/f/private/...` 一律 404；`/list` 与图库 `/g` 也会过滤掉 `private/` 对象
-- 因此任何新文档只需按此规则上传，即自动获得“公链 + 邮箱验证码”保护，无需再建 Access 应用
+  - key 固定为 `private/<文件名>`，**不加时间戳、同名覆盖**，链接长期不变
+  - 返回的 `url` 是 `https://docs.xzqf.nyc.mn/private/<文件名>`，也可省略前缀直接访问
+- **双重隔离**：`up.xzqf.nyc.mn/f/private/...` 一律 404；`/list` 与图库 `/g` 过滤掉 `private/` 对象
+- 新增文档后，把链接追加到文档中心页面（源文件 `private/docs-index.html`）并重新上传一次即可
+- 文件名用英文小写达意命名（如 `home-redesign-plan.md`），中文会被清洗为下划线
 
 ---
 
