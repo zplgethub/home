@@ -223,12 +223,13 @@ document.getElementById('up').onclick=function(){
 };
 function addIndex(scope,name,url){
   msg('更新索引…');
-  return fetch('/index-source').then(function(r){return r.text();}).then(function(html){
+  return fetch('/index-source').then(function(r){if(!r.ok)throw new Error('读取索引失败 '+r.status);return r.text();}).then(function(html){
+    if(html.trim().charAt(0)!=='<')throw new Error('索引内容异常，已中止写入');
     var title=name.replace(/\\.[a-z0-9]+$/i,'');
     var item='<a class="item" href="/'+scope+'/'+name+'">\\n  <div class="t">'+title+'<span class="tag">'+scope+'</span></div>\\n  <div class="d">上传于 '+new Date().toLocaleDateString()+'</div>\\n</a>\\n\\n';
     if(html.indexOf('/'+scope+'/'+name)===-1)html=html.replace('<footer>',item+'<footer>');
     return fetch('/update-index',{method:'POST',headers:{'x-upload-token':tok,'content-type':'text/html; charset=utf-8'},body:html});
-  }).then(function(r){return r.json();}).then(function(j){msg(j.ok?'完成，索引已更新':'索引更新失败：'+(j.error||''));load();});
+  }).then(function(r){return r.json();}).then(function(j){msg(j.ok?'完成，索引已更新':'索引更新失败：'+(j.error||''));load();}).catch(function(e){msg('索引未更新：'+e.message);load();});
 }
 function load(){
   saveTok();if(!tok)return;
