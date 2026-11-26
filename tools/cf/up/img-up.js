@@ -265,7 +265,12 @@ async function listDocs(env) {
   return items;
 }
 
-function renderDocsIndex(items) {
+function renderDocsIndex(items, scope) {
+  const subtitle =
+    scope === "private"
+      ? "私有文档 · 需邮箱验证码"
+      : "公开文档 · 无需登录 · <a href='/private'>进入私有文档</a>";
+  const title = scope === "private" ? "私有文档" : "文档中心";
   const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
   const rows = items
     .map((it) => {
@@ -288,10 +293,10 @@ a.item:hover{box-shadow:0 4px 14px rgba(0,0,0,.06)}
 .tag{display:inline-block;font-size:12px;color:#4B3FE3;border:1px solid #4B3FE3;border-radius:999px;padding:1px 10px;margin-left:8px;vertical-align:middle}
 footer{margin-top:28px;font-size:12px;color:#9ca3af}
 </style></head><body>
-<h1>文档中心</h1>
-<p class="sub">公开文档直接阅读，私有文档需邮箱验证码 · 共 ${items.length} 篇</p>
+<h1>${title}</h1>
+<p class="sub">${subtitle} · 共 ${items.length} 篇</p>
 ${rows || "<p>还没有文档</p>"}
-<footer>本页由存储桶内容自动生成，上传即出现，无需手动维护索引。</footer>
+<footer>${scope === "private" ? "私有内容仅授权邮箱可见。" : "本页由存储桶内容自动生成，上传即出现。"}</footer>
 </body></html>`;
 }
 
@@ -337,15 +342,15 @@ export default {
 
       // 仅 GET/HEAD 走文档读取；/upload、/delete 等写操作落到下方通用路由
       if (req.method === "GET" || req.method === "HEAD") {
-        let key = decodeURIComponent(url.pathname.slice(1));
-        if (!key) key = "public/docs-index.html";
-        if (!/^(private|public)\//.test(key)) return json({ error: "not found" }, 404);
-        if (key === "public/docs-index.html") {
-          const items = await listDocs(env);
-          return new Response(renderDocsIndex(items), {
+        let key = decodeURIComponent(url.pathname.slice(1)).replace(/\/$/, "");
+        if (!key || key === "public" || key === "public/docs-index.html" || key === "private") {
+          const scope = key === "private" ? "private" : "public";
+          const items = (await listDocs(env)).filter((it) => it.key.startsWith(scope + "/"));
+          return new Response(renderDocsIndex(items, scope), {
             headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" },
           });
         }
+        if (!/^(private|public)\//.test(key)) return json({ error: "not found" }, 404);
         const signed = await signRequest(env, "GET", key, null);
         const obj = await fetch(signed.url, { headers: signed.headers });
         if (!obj.ok) return json({ error: "not found" }, 404);

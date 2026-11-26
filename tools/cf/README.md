@@ -103,7 +103,7 @@
   - key 固定为 `<级别>/<文件名>`，**不加时间戳、同名覆盖**，链接长期不变
   - 返回的 `url` 自动指向 `docs.xzqf.nyc.mn`
 - **隔离**：`up.xzqf.nyc.mn` 对 `private/`、`public/` 前缀一律 404，`/list` 与图库 `/g` 也会过滤，文档只在 docs 域出现
-- **文档中心自动收录**：根路径由 Worker 实时列出存储桶中 `private/`、`public/` 的内容并生成页面（`no-cache`），上传即出现、删除即消失，**不再需要手工维护索引文件**
+- **文档中心自动收录**：`https://docs.xzqf.nyc.mn/` 只列 **public** 文档；`https://docs.xzqf.nyc.mn/private` 列 **private** 文档（该路径本身也受 Access 保护）。两处都由 Worker 实时生成（`no-cache`），上传即出现、删除即消失，**无需维护索引文件**
 - **索引防误删保留**：`/delete` 仍拒绝删除遗留的 `public/docs-index.html` 静态文件；`/update-index` 服务端校验仅接受完整 HTML（历史兼容接口，新流程已不调用）
 - 文件名用英文小写达意命名（如 `home-redesign-plan.md`），中文会被清洗为下划线
 
