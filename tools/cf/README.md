@@ -104,6 +104,7 @@
   - 返回的 `url` 自动指向 `docs.xzqf.nyc.mn`
 - **隔离**：`up.xzqf.nyc.mn` 对 `private/`、`public/` 前缀一律 404，`/list` 与图库 `/g` 也会过滤，文档只在 docs 域出现
 - 新增文档后，把链接追加到索引页并重新上传 `public/docs-index.html`
+- **索引页保护**：`/delete` 拒绝删除 `public/docs-index.html`，管理页不显示其删除按钮；`/update-index` 在服务端校验内容必须是完整 HTML，非 HTML（例如错误 JSON）一律拒绝写入
 - 文件名用英文小写达意命名（如 `home-redesign-plan.md`），中文会被清洗为下划线
 
 ---

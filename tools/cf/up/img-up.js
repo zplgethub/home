@@ -234,15 +234,18 @@ function addIndex(scope,name,url){
 function load(){
   saveTok();if(!tok)return;
   fetch('/list-docs?token='+encodeURIComponent(tok)).then(function(r){return r.json();}).then(function(j){
+    if(j.error){msg('列表加载失败：'+j.error+'（请确认上传密钥是最新的）');return;}
     var rows=document.getElementById('rows');rows.innerHTML='';
     (j.items||[]).forEach(function(it){
       var tr=document.createElement('tr');
       var level=it.key.split('/')[0];
+      var isIndex=it.key==='public/docs-index.html'||it.key==='private/docs-index.html';
       tr.innerHTML='<td><a href="https://docs.xzqf.nyc.mn/'+it.key+'" target="_blank">'+it.key.split('/').slice(1).join('/')+'</a></td>'
         +'<td><span class="tag '+(level==='private'?'pri':'')+'">'+level+'</span></td>'
         +'<td>'+(it.size/1024).toFixed(0)+' KB</td>'
-        +'<td><button class="del">删除</button></td>';
-      tr.querySelector('.del').onclick=function(){
+        +'<td>'+(isIndex?'<span class="tag">索引页·受保护</span>':'<button class="del">删除</button>')+'</td>';
+      var delBtn=tr.querySelector('.del');
+      if(delBtn)delBtn.onclick=function(){
         if(!confirm('确定删除 '+it.key+' ？'))return;
         fetch('/delete?key='+encodeURIComponent(it.key),{method:'POST',headers:{'x-upload-token':tok}}).then(function(r){return r.json();}).then(function(j){msg(j.ok?'已删除（公开文档缓存最长 1 小时后完全失效）':'删除失败');load();});
       };
@@ -296,6 +299,9 @@ export default {
         if (!authed) return json({ error: "invalid token" }, 401);
         const body = await req.arrayBuffer();
         if (!body.byteLength || body.byteLength > 1024 * 1024) return json({ error: "bad body" }, 400);
+        const text = new TextDecoder().decode(body);
+        if (!/^\s*</.test(text) || !text.includes("</html>"))
+          return json({ error: "index content invalid, rejected" }, 400);
         const signed = await signRequest(env, "PUT", "public/docs-index.html", body);
         const put = await fetch(signed.url, {
           method: "PUT",
@@ -362,6 +368,8 @@ export default {
       if (!authed) return json({ error: "invalid token" }, 401);
       const key = url.searchParams.get("key");
       if (!key) return json({ error: "missing key" }, 400);
+      if (key === "public/docs-index.html" || key === "private/docs-index.html")
+        return json({ error: "文档中心索引页不允许删除" }, 400);
       const signed = await signRequest(env, "DELETE", key, null);
       const r = await fetch(signed.url, { method: "DELETE", headers: signed.headers });
       if (!r.ok && r.status !== 404) {
