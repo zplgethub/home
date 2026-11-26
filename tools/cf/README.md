@@ -169,7 +169,18 @@ curl "https://up.xzqf.nyc.mn/list?token=<上传密钥>"
 curl -X POST "https://up.xzqf.nyc.mn/delete?key=<key>" -H "x-upload-token: <上传密钥>"
 ```
 
-### 4.6 修改 Worker 代码
+### 4.6 文档管理页（免命令行）
+
+地址：**`https://docs.xzqf.nyc.mn/admin`**
+
+- 粘贴一次上传密钥（存在浏览器 localStorage），之后打开即用
+- 上传：选文件 → 选级别（private/public）→ 填文件名（可留空用原文件名，自动补扩展名）→ 同名覆盖
+- 勾选“同时把文档加入索引页”会自动更新文档中心
+- 列表区可打开文档、删除文档（公开文档删除后缓存最长 1 小时自愈）
+- 配套接口：`/list-docs`（文档列表）、`/index-source`、`/update-index`，均需上传密钥
+- 管理页本身不需要 Access 登录，所有写操作由上传密钥保护
+
+### 4.7 修改 Worker 代码
 
 源码：`/workspace/tools/cf/up/img-up.js`（沙箱内持久保存）。
 
@@ -181,7 +192,7 @@ curl -X PUT "https://api.cloudflare.com/client/v4/accounts/{A}/workers/scripts/i
   -F 'img-up.js=@img-up.js;type=application/javascript+module'
 ```
 
-### 4.7 密钥轮换
+### 4.8 密钥轮换
 
 | 密钥 | 位置 | 轮换方式 |
 |---|---|---|

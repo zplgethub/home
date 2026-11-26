@@ -150,6 +150,109 @@ function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8" } });
 }
 
+const DOCS_ADMIN = `<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>文档管理</title>
+<style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;max-width:860px;margin:0 auto;padding:32px 20px;color:#1f2937;background:#fafafa;line-height:1.6}
+h1{font-size:22px;margin:0 0 4px}p.sub{color:#6b7280;font-size:13px;margin:0 0 20px}
+.panel{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px 20px;margin-bottom:18px}
+label{font-size:13px;color:#6b7280;display:block;margin:10px 0 4px}
+input[type=password],input[type=text]{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px}
+select{padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px}
+button{background:#4B3FE3;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:14px;cursor:pointer}
+button.ghost{background:#fff;color:#4B3FE3;border:1px solid #4B3FE3}
+button.del{background:#fff;color:#dc2626;border:1px solid #fca5a5;padding:4px 10px;font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #f0f0f0;word-break:break-all}
+th{color:#6b7280;font-weight:500}
+.tag{font-size:11px;border-radius:999px;padding:1px 8px;border:1px solid #d1d5db;color:#6b7280}
+.tag.pri{border-color:#4B3FE3;color:#4B3FE3}
+#msg{font-size:13px;color:#4B3FE3;min-height:20px;margin-top:8px}
+a{color:#4B3FE3;text-decoration:none}
+</style></head><body>
+<h1>文档管理</h1>
+<p class="sub">上传 / 删除 / 自动更新索引 · <a href="/" target="_blank">返回文档中心</a></p>
+
+<div class="panel">
+<label>上传密钥（保存在本机浏览器）</label>
+<input type="password" id="tok" placeholder="粘贴上传密钥">
+</div>
+
+<div class="panel">
+<label>选择文件（单文件 ≤ 25MB）</label>
+<input type="file" id="file">
+<label>访问级别</label>
+<select id="scope"><option value="private">私有（需邮箱验证码）</option><option value="public">公开（任何人可读）</option></select>
+<label>文件名（英文小写，不含扩展名也可，会自动补全）</label>
+<input type="text" id="name" placeholder="例如 home-redesign-plan">
+<button id="up" style="margin-top:12px">上传 / 覆盖</button>
+<label style="margin-top:14px"><input type="checkbox" id="autoindex" checked style="width:auto"> 同时把文档加入索引页</label>
+<div id="msg"></div>
+</div>
+
+<div class="panel">
+<button class="ghost" id="reload">刷新列表</button>
+<table><thead><tr><th>文档</th><th>级别</th><th>大小</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table>
+</div>
+
+<script>
+var tok=localStorage.getItem('up_tok')||'';document.getElementById('tok').value=tok;
+function msg(t){document.getElementById('msg').textContent=t;}
+function saveTok(){tok=document.getElementById('tok').value.trim();localStorage.setItem('up_tok',tok);}
+function curName(){
+  var n=document.getElementById('name').value.trim();
+  var f=document.getElementById('file').files[0];
+  if(!n&&f)n=f.name;
+  if(n&&!/\\.[a-z0-9]+$/i.test(n)&&f){var m=/\\.[a-z0-9]+$/i.exec(f.name);if(m)n+=m[0];}
+  return n;
+}
+document.getElementById('up').onclick=function(){
+  saveTok();if(!tok)return msg('请先填上传密钥');
+  var f=document.getElementById('file').files[0];if(!f)return msg('请选择文件');
+  var scope=document.getElementById('scope').value;var name=curName();
+  if(!name)return msg('请填写文件名');
+  var btn=this;btn.disabled=true;msg('上传中…');
+  fetch('/upload?name='+scope+'/'+encodeURIComponent(name),{method:'POST',headers:{'x-upload-token':tok,'content-type':f.type||'application/octet-stream'},body:f})
+  .then(function(r){return r.json();}).then(function(j){
+    btn.disabled=false;
+    if(!j.ok)return msg('失败：'+(j.error||''));
+    msg('成功：'+j.url);
+    if(document.getElementById('autoindex').checked)return addIndex(scope,name,j.url);
+    load();
+  }).catch(function(e){btn.disabled=false;msg('失败：'+e);});
+};
+function addIndex(scope,name,url){
+  msg('更新索引…');
+  return fetch('/index-source').then(function(r){return r.text();}).then(function(html){
+    var title=name.replace(/\\.[a-z0-9]+$/i,'');
+    var item='<a class="item" href="/'+scope+'/'+name+'">\\n  <div class="t">'+title+'<span class="tag">'+scope+'</span></div>\\n  <div class="d">上传于 '+new Date().toLocaleDateString()+'</div>\\n</a>\\n\\n';
+    if(html.indexOf('/'+scope+'/'+name)===-1)html=html.replace('<footer>',item+'<footer>');
+    return fetch('/update-index',{method:'POST',headers:{'x-upload-token':tok,'content-type':'text/html; charset=utf-8'},body:html});
+  }).then(function(r){return r.json();}).then(function(j){msg(j.ok?'完成，索引已更新':'索引更新失败：'+(j.error||''));load();});
+}
+function load(){
+  saveTok();if(!tok)return;
+  fetch('/list-docs?token='+encodeURIComponent(tok)).then(function(r){return r.json();}).then(function(j){
+    var rows=document.getElementById('rows');rows.innerHTML='';
+    (j.items||[]).forEach(function(it){
+      var tr=document.createElement('tr');
+      var level=it.key.split('/')[0];
+      tr.innerHTML='<td><a href="https://docs.xzqf.nyc.mn/'+it.key+'" target="_blank">'+it.key.split('/').slice(1).join('/')+'</a></td>'
+        +'<td><span class="tag '+(level==='private'?'pri':'')+'">'+level+'</span></td>'
+        +'<td>'+(it.size/1024).toFixed(0)+' KB</td>'
+        +'<td><button class="del">删除</button></td>';
+      tr.querySelector('.del').onclick=function(){
+        if(!confirm('确定删除 '+it.key+' ？'))return;
+        fetch('/delete?key='+encodeURIComponent(it.key),{method:'POST',headers:{'x-upload-token':tok}}).then(function(r){return r.json();}).then(function(j){msg(j.ok?'已删除（公开文档缓存最长 1 小时后完全失效）':'删除失败');load();});
+      };
+      rows.appendChild(tr);
+    });
+  });
+}
+document.getElementById('reload').onclick=load;
+if(tok)load();
+</script></body></html>`;
+
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
@@ -158,6 +261,49 @@ export default {
 
     // 私有文档域：整站由 Cloudflare Access 保护，仅可读取 private/ 前缀的对象
     if (url.hostname === "docs.xzqf.nyc.mn") {
+      if (url.pathname === "/admin")
+        return new Response(DOCS_ADMIN, { headers: { "content-type": "text/html; charset=utf-8" } });
+
+      if (url.pathname === "/list-docs") {
+        if (!authed) return json({ error: "invalid token" }, 401);
+        const items = [];
+        for (const prefix of ["private/", "public/"]) {
+          const q = `list-type=2&max-keys=1000&prefix=${encodeURIComponent(prefix)}`;
+          const signed = await signRequest(env, "GET", "", null, q);
+          const r = await fetch(signed.url, { headers: signed.headers });
+          const xml = await r.text();
+          for (const m of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+            const b = m[1];
+            const key = (/<Key>(.*?)<\/Key>/.exec(b) || [])[1];
+            const size = Number((/<Size>(\d+)<\/Size>/.exec(b) || [])[1] || 0);
+            const lm = (/<LastModified>(.*?)<\/LastModified>/.exec(b) || [])[1] || "";
+            if (key) items.push({ key, size, lastModified: lm });
+          }
+        }
+        items.sort((a, b) => (a.lastModified < b.lastModified ? 1 : -1));
+        return json({ ok: true, count: items.length, items });
+      }
+
+      if (url.pathname === "/index-source") {
+        if (!authed) return json({ error: "invalid token" }, 401);
+        const signed = await signRequest(env, "GET", "public/docs-index.html", null);
+        const r = await fetch(signed.url, { headers: signed.headers });
+        return new Response(r.body, { status: r.status, headers: { "content-type": "text/html; charset=utf-8" } });
+      }
+
+      if (url.pathname === "/update-index" && req.method === "POST") {
+        if (!authed) return json({ error: "invalid token" }, 401);
+        const body = await req.arrayBuffer();
+        if (!body.byteLength || body.byteLength > 1024 * 1024) return json({ error: "bad body" }, 400);
+        const signed = await signRequest(env, "PUT", "public/docs-index.html", body);
+        const put = await fetch(signed.url, {
+          method: "PUT",
+          headers: { ...signed.headers, "content-type": "text/html; charset=utf-8" },
+          body,
+        });
+        return json({ ok: put.ok }, put.ok ? 200 : 502);
+      }
+
       let key = decodeURIComponent(url.pathname.slice(1));
       if (!key) key = "public/docs-index.html";
       if (!/^(private|public)\//.test(key)) return json({ error: "not found" }, 404);
