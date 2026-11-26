@@ -304,17 +304,20 @@ export default {
         return json({ ok: put.ok }, put.ok ? 200 : 502);
       }
 
-      let key = decodeURIComponent(url.pathname.slice(1));
-      if (!key) key = "public/docs-index.html";
-      if (!/^(private|public)\//.test(key)) return json({ error: "not found" }, 404);
-      const signed = await signRequest(env, "GET", key, null);
-      const obj = await fetch(signed.url, { headers: signed.headers });
-      if (!obj.ok) return json({ error: "not found" }, 404);
-      const out = new Headers();
-      out.set("content-type", obj.headers.get("content-type") || "application/octet-stream");
-      out.set("cache-control", key.startsWith("private/") ? "private, no-cache" : "public, max-age=3600");
-      out.set("x-content-type-options", "nosniff");
-      return new Response(req.method === "HEAD" ? null : obj.body, { status: 200, headers: out });
+      // 仅 GET/HEAD 走文档读取；/upload、/delete 等写操作落到下方通用路由
+      if (req.method === "GET" || req.method === "HEAD") {
+        let key = decodeURIComponent(url.pathname.slice(1));
+        if (!key) key = "public/docs-index.html";
+        if (!/^(private|public)\//.test(key)) return json({ error: "not found" }, 404);
+        const signed = await signRequest(env, "GET", key, null);
+        const obj = await fetch(signed.url, { headers: signed.headers });
+        if (!obj.ok) return json({ error: "not found" }, 404);
+        const out = new Headers();
+        out.set("content-type", obj.headers.get("content-type") || "application/octet-stream");
+        out.set("cache-control", key.startsWith("private/") ? "private, no-cache" : "public, max-age=3600");
+        out.set("x-content-type-options", "nosniff");
+        return new Response(req.method === "HEAD" ? null : obj.body, { status: 200, headers: out });
+      }
     }
 
     if (req.method === "GET" && url.pathname === "/")
