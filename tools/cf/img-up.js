@@ -110,6 +110,8 @@ const GALLERY = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
  #ask input{width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin:10px 0;font-size:14px}
 </style></head><body>
 <header><h1>图库 · xzqf</h1><span id="meta"></span><a href="/" style="margin-left:auto;font-size:13px;color:#0284c7;text-decoration:none">上传</a></header>
+<div style="padding:12px 14px 0;display:flex;gap:8px"><input id="gq" type="search" placeholder="按文件名搜索…" style="flex:1;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px"><button class="g" onclick="gPage=1;load()" style="font-size:13px">搜索</button></div>
+<div id="gpager" style="padding:10px 14px 0;display:flex;gap:6px"></div>
 <div id="grid"></div>
 <div id="detail" class="hide"><div class="panel">
  <img id="dimg" alt=""><div id="dmeta" style="font-size:12px;color:#64748b;margin-bottom:10px"></div>
@@ -122,13 +124,13 @@ const GALLERY = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <div id="ask" class="hide"><div class="box"><b>输入上传密钥</b><div style="font-size:12px;color:#64748b">仅保存在本机浏览器</div>
  <input id="tk" placeholder="上传密钥"><button class="b" id="gotoken" style="width:100%">进入</button></div></div>
 <script>
-var tok=new URLSearchParams(location.search).get('token')||localStorage.getItem('up_token')||'';var items=[];
+var tok=new URLSearchParams(location.search).get('token')||localStorage.getItem('up_token')||'';var items=[];var gPage=1;
 function fmt(n){return n>1048576?(n/1048576).toFixed(1)+' MB':(n/1024).toFixed(1)+' KB';}
 function isImg(k){return /\\.(jpe?g|png|gif|webp|svg|avif|bmp|ico)$/i.test(k);}
 function render(){var g=document.getElementById('grid');g.innerHTML='';document.getElementById('meta').textContent=items.length+' 个文件';
  items.forEach(function(it){var d=document.createElement('div');d.className='card';
  var inner=isImg(it.key)?'<img loading="lazy" src="'+it.url+'">':'<div class="ph">FILE</div>';
- d.innerHTML=inner+'<div class="m"><b>'+it.key+'</b><span>'+fmt(it.size)+' · '+it.lastModified.slice(0,10)+'</span></div>';
+ d.innerHTML=inner+'<div class="m"><b>'+it.key.split('/').slice(2).join('/')+'</b><span>'+fmt(it.size)+' · '+it.lastModified.slice(0,10)+'</span></div>';
  d.onclick=function(){show(it);};g.appendChild(d);});}
 function show(it){document.getElementById('detail').classList.remove('hide');var img=document.getElementById('dimg');
  img.src=it.url;img.style.display=isImg(it.key)?'block':'none';
@@ -139,7 +141,19 @@ function del(it){if(!confirm('确定删除 '+it.key+' ？'))return;
  fetch('/delete?key='+encodeURIComponent(it.key),{method:'POST',headers:{'x-upload-token':tok}}).then(function(r){return r.json();}).then(function(j){
  if(j.ok){items=items.filter(function(x){return x.key!==it.key;});render();document.getElementById('detail').classList.add('hide');}
  else alert('删除失败：'+(j.error||''));});}
-function load(){fetch('/list?token='+encodeURIComponent(tok)).then(function(r){return r.json();}).then(function(j){items=j.items||[];render();}).catch(function(e){alert('加载失败：'+e);});}
+function load(){
+  var sp=new URLSearchParams();sp.set('token',tok);sp.set('page',gPage);
+  var q=document.getElementById('gq').value.trim();if(q)sp.set('q',q);
+  fetch('/list?'+sp.toString()).then(function(r){return r.json();}).then(function(j){
+    items=j.items||[];render();
+    document.getElementById('meta').textContent='共 '+j.total+' 个 · 第 '+j.page+' / '+j.pages+' 页';
+    var box=document.getElementById('gpager');box.innerHTML='';
+    if(j.pages>1){
+      function mk(label,p,dis){var b=document.createElement('button');b.textContent=label;if(dis)b.disabled=true;else b.onclick=function(){gPage=p;load();};box.appendChild(b);}
+      mk('上一页',j.page-1,j.page<=1);mk('下一页',j.page+1,j.page>=j.pages);
+    }
+  }).catch(function(e){alert('加载失败：'+e);});
+}
 document.getElementById('copy1').onclick=function(){navigator.clipboard.writeText(document.getElementById('dlink').value).then(function(){
  document.getElementById('copy1').textContent='已复制';setTimeout(function(){document.getElementById('copy1').textContent='复制直链';},1200);});};
 document.getElementById('close').onclick=function(){document.getElementById('detail').classList.add('hide');};
@@ -170,6 +184,12 @@ th{color:#6b7280;font-weight:500}
 .tag.pri{border-color:#4B3FE3;color:#4B3FE3}
 #msg{font-size:13px;color:#4B3FE3;min-height:20px;margin-top:8px}
 a{color:#4B3FE3;text-decoration:none}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.tools input[type=search]{flex:1;min-width:160px;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px}
+.pager{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:14px;font-size:13px}
+.pager button{background:#fff;color:#374151;border:1px solid #e5e7eb;padding:6px 11px;font-size:13px}
+.pager button.cur{background:#4B3FE3;border-color:#4B3FE3;color:#fff}
+.pager button[disabled]{color:#c7cbd1;background:#f9fafb;cursor:default}
 </style></head><body>
 <h1>文档管理</h1>
 <p class="sub">上传 / 删除 / 自动更新索引 · <a href="/" target="_blank">返回文档中心</a></p>
@@ -193,8 +213,15 @@ a{color:#4B3FE3;text-decoration:none}
 </div>
 
 <div class="panel">
-<button class="ghost" id="reload">刷新列表</button>
-<table><thead><tr><th>名称</th><th>级别</th><th>类型</th><th>大小</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table>
+<div class="tools">
+  <input type="search" id="q" placeholder="按文件名搜索…">
+  <select id="fscope"><option value="all">全部级别</option><option value="public">公开</option><option value="private">私有</option></select>
+  <select id="ftype"><option value="all">全部类型</option><option value="doc">文档</option><option value="img">图片</option></select>
+  <button class="ghost" id="reload">刷新</button>
+</div>
+<div class="sub" id="count"></div>
+<table><thead><tr><th>名称</th><th>级别</th><th>类型</th><th>大小</th><th>上传时间</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table>
+<div class="pager" id="pager"></div>
 </div>
 
 <script>
@@ -222,83 +249,206 @@ document.getElementById('up').onclick=function(){
     load();
   }).catch(function(e){btn.disabled=false;msg('失败：'+e);});
 };
+var state={page:1,size:20,q:''};
 function load(){
   saveTok();if(!tok)return;
-  fetch('/list-docs?token='+encodeURIComponent(tok)).then(function(r){return r.json();}).then(function(j){
+  var sp=new URLSearchParams();
+  sp.set('token',tok);sp.set('page',state.page);sp.set('size',state.size);
+  sp.set('scope',document.getElementById('fscope').value);
+  sp.set('type',document.getElementById('ftype').value);
+  if(state.q)sp.set('q',state.q);
+  fetch('/list-docs?'+sp.toString()).then(function(r){return r.json();}).then(function(j){
     if(j.error){msg('列表加载失败：'+j.error+'（请确认上传密钥是最新的）');return;}
+    msg('');
+    document.getElementById('count').textContent=
+      (state.q?'匹配「'+state.q+'」':'全部')+' '+j.total+' 项 · 第 '+j.page+' / '+j.pages+' 页 · 按上传时间倒序';
     var rows=document.getElementById('rows');rows.innerHTML='';
+    if(!(j.items||[]).length){rows.innerHTML='<tr><td colspan="6" style="color:#9ca3af">没有匹配的内容</td></tr>';}
     (j.items||[]).forEach(function(it){
       var tr=document.createElement('tr');
       var parts=it.key.split('/');
       var level=parts[0];var ctype=parts[1]||'-';
-      tr.innerHTML='<td><a href="https://docs.xzqf.nyc.mn/'+it.key+'" target="_blank">'+parts.slice(2).join('/')+'</a></td>'
+      tr.innerHTML='<td><a href="'+it.url+'" target="_blank">'+parts.slice(2).join('/')+'</a></td>'
         +'<td><span class="tag '+(level==='private'?'pri':'')+'">'+level+'</span></td>'
         +'<td>'+ctype+'</td>'
         +'<td>'+(it.size/1024).toFixed(0)+' KB</td>'
+        +'<td>'+String(it.lastModified||'').slice(0,16).replace('T',' ')+'</td>'
         +'<td><button class="del">删除</button></td>';
       var delBtn=tr.querySelector('.del');
       if(delBtn)delBtn.onclick=function(){
         if(!confirm('确定删除 '+it.key+' ？'))return;
-        fetch('/delete?key='+encodeURIComponent(it.key),{method:'POST',headers:{'x-upload-token':tok}}).then(function(r){return r.json();}).then(function(j){msg(j.ok?'已删除（公开文档缓存最长 1 小时后完全失效）':'删除失败');load();});
+        fetch('/delete?key='+encodeURIComponent(it.key),{method:'POST',headers:{'x-upload-token':tok}}).then(function(r){return r.json();}).then(function(j){msg(j.ok?'已删除':'删除失败');load();});
       };
       rows.appendChild(tr);
     });
-  });
+    renderPager(j);
+  }).catch(function(e){msg('列表加载失败：'+e);});
 }
-document.getElementById('reload').onclick=load;
+function renderPager(j){
+  var box=document.getElementById('pager');box.innerHTML='';
+  if(j.pages<=1)return;
+  function btn(label,page,cls,disabled){
+    var b=document.createElement('button');
+    b.textContent=label;if(cls)b.className=cls;
+    if(disabled)b.disabled=true;else b.onclick=function(){state.page=page;load();};
+    box.appendChild(b);
+  }
+  btn('上一页',j.page-1,'',j.page<=1);
+  var marks=[];
+  for(var p=1;p<=j.pages;p++){
+    if(p===1||p===j.pages||Math.abs(p-j.page)<=2)marks.push(p);
+    else if(marks[marks.length-1]!=='…')marks.push('…');
+  }
+  marks.forEach(function(m){
+    if(m==='…'){var s=document.createElement('span');s.textContent='…';s.style.color='#c7cbd1';box.appendChild(s);}
+    else btn(String(m),m,m===j.page?'cur':'',false);
+  });
+  btn('下一页',j.page+1,'',j.page>=j.pages);
+}
+var qt=null;
+document.getElementById('q').oninput=function(){
+  var v=this.value.trim();clearTimeout(qt);
+  qt=setTimeout(function(){state.q=v;state.page=1;load();},300);
+};
+document.getElementById('fscope').onchange=function(){state.page=1;load();};
+document.getElementById('ftype').onchange=function(){state.page=1;load();};
+document.getElementById('reload').onclick=function(){state.page=1;load();};
 if(tok)load();
 </script></body></html>`;
 
-async function listDocs(env) {
+// 列表缓存：同一 isolate 内 30 秒，写操作后立即失效
+const LIST_CACHE = new Map();
+const LIST_TTL = 30 * 1000;
+const LIST_MAX_PAGES = 5; // 每页 1000，上限 5000 个对象
+
+async function listPrefix(env, prefix) {
+  const now = Date.now();
+  const hit = LIST_CACHE.get(prefix);
+  if (hit && now - hit.at < LIST_TTL) return hit.items;
   const items = [];
-  for (const prefix of ["private/", "public/"]) {
-    const q = `list-type=2&max-keys=1000&prefix=${encodeURIComponent(prefix)}`;
-    const signed = await signRequest(env, "GET", "", null, q);
+  let cont = "";
+  for (let i = 0; i < LIST_MAX_PAGES; i++) {
+    const params = [["list-type", "2"], ["max-keys", "1000"], ["prefix", prefix]];
+    if (cont) params.push(["continuation-token", cont]);
+    params.sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    const qs = params.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
+    const signed = await signRequest(env, "GET", "", null, qs);
     const r = await fetch(signed.url, { headers: signed.headers });
     const xml = await r.text();
+    if (!r.ok) throw new Error(`B2 list ${r.status}: ${xml.slice(0, 120)}`);
     for (const m of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
       const b = m[1];
       const key = (/<Key>(.*?)<\/Key>/.exec(b) || [])[1];
       const size = Number((/<Size>(\d+)<\/Size>/.exec(b) || [])[1] || 0);
       const lm = (/<LastModified>(.*?)<\/LastModified>/.exec(b) || [])[1] || "";
-      if (key && key !== "public/docs-index.html") items.push({ key, size, lastModified: lm });
+      if (key && key.startsWith(prefix)) items.push({ key, size, lastModified: lm });
     }
+    const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
+    let next = (/<NextContinuationToken>(.*?)<\/NextContinuationToken>/.exec(xml) || [])[1] || "";
+    next = next.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+    if (!truncated || !next) break;
+    cont = next;
   }
-  items.sort((a, b) => (a.lastModified < b.lastModified ? 1 : -1));
+  // 按上传时间倒序：最新在前
+  items.sort((a, b) => (a.lastModified < b.lastModified ? 1 : a.lastModified > b.lastModified ? -1 : 0));
+  LIST_CACHE.set(prefix, { at: now, items });
+  if (LIST_CACHE.size > 40) LIST_CACHE.clear();
   return items;
 }
 
-function renderDocsIndex(items, scope) {
+function invalidateList() {
+  LIST_CACHE.clear();
+}
+
+// 服务端筛选 + 分页：q 为文件名子串（不区分大小写）
+function pickPage(url, items) {
+  const rawQ = (url.searchParams.get("q") || "").trim();
+  const q = rawQ.toLowerCase();
+  const size = Math.min(100, Math.max(10, Number(url.searchParams.get("size")) || 20));
+  const matched = q ? items.filter((it) => it.key.toLowerCase().includes(q)) : items;
+  const pages = Math.max(1, Math.ceil(matched.length / size));
+  const page = Math.max(1, Math.min(pages, Math.floor(Number(url.searchParams.get("page")) || 1)));
+  const slice = matched.slice((page - 1) * size, page * size).map((it) => ({
+    ...it,
+    url: `https://docs.xzqf.nyc.mn/${it.key}`,
+  }));
+  return { items: slice, total: matched.length, all: items.length, page, size, pages, q: rawQ };
+}
+
+function pagerHtml(pager, path) {
+  if (pager.pages <= 1) return "";
+  const href = (p) => {
+    const sp = new URLSearchParams();
+    if (pager.q) sp.set("q", pager.q);
+    if (pager.size !== 20) sp.set("size", String(pager.size));
+    if (p > 1) sp.set("page", String(p));
+    const s = sp.toString();
+    return s ? `${path}?${s}` : path;
+  };
+  const parts = [pager.page > 1 ? `<a href="${href(pager.page - 1)}">上一页</a>` : `<span class="off">上一页</span>`];
+  const marks = [];
+  for (let p = 1; p <= pager.pages; p++) {
+    if (p === 1 || p === pager.pages || Math.abs(p - pager.page) <= 2) marks.push(p);
+    else if (marks[marks.length - 1] !== "…") marks.push("…");
+  }
+  for (const m of marks) {
+    if (m === "…") parts.push(`<span class="off">…</span>`);
+    else if (m === pager.page) parts.push(`<span class="cur">${m}</span>`);
+    else parts.push(`<a href="${href(m)}">${m}</a>`);
+  }
+  parts.push(pager.page < pager.pages ? `<a href="${href(pager.page + 1)}">下一页</a>` : `<span class="off">下一页</span>`);
+  return `<nav class="pager">${parts.join("")}</nav>`;
+}
+
+function renderDocsIndex(pager, scope) {
+  const path = scope === "private" ? "/private" : "/";
   const subtitle =
     scope === "private"
       ? "私有文档 · 需邮箱验证码"
       : "公开文档 · 无需登录 · <a href='/private'>进入私有文档</a>";
   const title = scope === "private" ? "私有文档" : "文档中心";
-  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-  const rows = items
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+  const rows = pager.items
     .map((it) => {
       const level = it.key.split("/")[0];
-      const name = it.key.split("/").slice(1).join("/");
+      const name = it.key.split("/").slice(2).join("/");
       const size = it.size > 1048576 ? (it.size / 1048576).toFixed(1) + " MB" : (it.size / 1024).toFixed(0) + " KB";
-      const date = (it.lastModified || "").slice(0, 10);
+      const date = (it.lastModified || "").slice(0, 16).replace("T", " ");
       return `<a class="item" href="/${it.key}"><div class="t">${esc(name)}<span class="tag">${level}</span></div><div class="d">${size} · ${date}${level === "private" ? " · 需邮箱验证码" : ""}</div></a>`;
     })
     .join("\n");
+  const countLine = pager.q
+    ? `匹配「${esc(pager.q)}」共 ${pager.total} 篇（全部 ${pager.all} 篇）`
+    : `共 ${pager.total} 篇 · 按上传时间倒序`;
   return `<!doctype html><html lang="zh"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>文档中心</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
 <style>
 body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;max-width:760px;margin:0 auto;padding:40px 20px;color:#1f2937;background:#fafafa;line-height:1.7}
-h1{font-size:24px;margin:0 0 6px}p.sub{color:#6b7280;font-size:14px;margin:0 0 28px}
+h1{font-size:24px;margin:0 0 6px}p.sub{color:#6b7280;font-size:14px;margin:0 0 18px}
 a.item{display:block;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px 20px;margin-bottom:14px;text-decoration:none;color:inherit}
 a.item:hover{box-shadow:0 4px 14px rgba(0,0,0,.06)}
 .t{font-size:16px;font-weight:600;margin-bottom:4px;word-break:break-all}
 .d{font-size:13px;color:#6b7280}
 .tag{display:inline-block;font-size:12px;color:#4B3FE3;border:1px solid #4B3FE3;border-radius:999px;padding:1px 10px;margin-left:8px;vertical-align:middle}
+form.search{display:flex;gap:8px;margin:0 0 22px}
+form.search input{flex:1;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;background:#fff}
+form.search button{padding:10px 16px;border:0;border-radius:8px;background:#4B3FE3;color:#fff;font-size:14px;cursor:pointer}
+form.search a{align-self:center;font-size:13px;color:#6b7280;text-decoration:none}
+nav.pager{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:20px;font-size:13px}
+nav.pager a,nav.pager span{padding:6px 11px;border-radius:7px;border:1px solid #e5e7eb;background:#fff;color:#374151;text-decoration:none}
+nav.pager .cur{background:#4B3FE3;border-color:#4B3FE3;color:#fff}
+nav.pager .off{color:#c7cbd1;background:#f9fafb}
 footer{margin-top:28px;font-size:12px;color:#9ca3af}
 </style></head><body>
 <h1>${title}</h1>
-<p class="sub">${subtitle} · 共 ${items.length} 篇</p>
-${rows || "<p>还没有文档</p>"}
+<p class="sub">${subtitle}</p>
+<form class="search" method="get" action="${path}">
+<input type="search" name="q" value="${esc(pager.q)}" placeholder="按文件名搜索…">
+<button type="submit">搜索</button>${pager.q ? `<a href="${path}">清除</a>` : ""}
+</form>
+<p class="sub">${countLine}</p>
+${rows || "<p>没有匹配的文档</p>"}
+${pagerHtml(pager, path)}
 <footer>${scope === "private" ? "私有内容仅授权邮箱可见。" : "本页由存储桶内容自动生成，上传即出现。"}</footer>
 </body></html>`;
 }
@@ -316,8 +466,15 @@ export default {
 
       if (url.pathname === "/list-docs") {
         if (!authed) return json({ error: "invalid token" }, 401);
-        const items = await listDocs(env);
-        return json({ ok: true, count: items.length, items });
+        const scopeF = url.searchParams.get("scope") || "all";
+        const typeF = url.searchParams.get("type") || "all";
+        const scopes = scopeF === "public" || scopeF === "private" ? [scopeF] : ["public", "private"];
+        const types = typeF === "doc" || typeF === "img" ? [typeF] : ["doc", "img"];
+        const all = [];
+        for (const s of scopes) for (const t of types) all.push(...(await listPrefix(env, `${s}/${t}/`)));
+        all.sort((a, b) => (a.lastModified < b.lastModified ? 1 : a.lastModified > b.lastModified ? -1 : 0));
+        const pager = pickPage(url, all);
+        return json({ ok: true, ...pager });
       }
 
       if (url.pathname === "/index-source") {
@@ -348,8 +505,8 @@ export default {
         let key = decodeURIComponent(url.pathname.slice(1)).replace(/\/$/, "");
         if (!key || key === "public" || key === "public/docs-index.html" || key === "private") {
           const scope = key === "private" ? "private" : "public";
-          const items = (await listDocs(env)).filter((it) => it.key.startsWith(scope + "/doc/"));
-          return new Response(renderDocsIndex(items, scope), {
+          const all = await listPrefix(env, `${scope}/doc/`);
+          return new Response(renderDocsIndex(pickPage(url, all), scope), {
             headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" },
           });
         }
@@ -374,32 +531,8 @@ export default {
     if (req.method === "GET" && url.pathname === "/list") {
       if (!authed) return json({ error: "invalid token" }, 401);
       const prefix = url.searchParams.get("prefix") || "public/img/";
-      const items = [];
-      let cont = "";
-      for (let page = 0; page < 5; page++) {
-        const params = [["continuation-token", cont], ["list-type", "2"], ["max-keys", "1000"]];
-        if (prefix) params.push(["prefix", prefix]);
-        params.sort((a, b) => (a[0] < b[0] ? -1 : 1));
-        const q = params.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
-        const signed = await signRequest(env, "GET", "", null, q);
-        const r = await fetch(signed.url, { headers: signed.headers });
-        const xml = await r.text();
-        if (!r.ok) return json({ error: `B2 list ${r.status}: ${xml.slice(0, 200)}` }, 502);
-        for (const m of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
-          const b = m[1];
-          const key = (/<Key>(.*?)<\/Key>/.exec(b) || [])[1];
-          const size = Number((/<Size>(\d+)<\/Size>/.exec(b) || [])[1] || 0);
-          const lm = (/<LastModified>(.*?)<\/LastModified>/.exec(b) || [])[1] || "";
-          if (key && key.startsWith(prefix)) items.push({ key, size, lastModified: lm, url: `https://docs.xzqf.nyc.mn/${key}` });
-        }
-        const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
-        let next = (/<NextContinuationToken>(.*?)<\/NextContinuationToken>/.exec(xml) || [])[1];
-        if (next) next = next.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
-        if (!truncated || !next) break;
-        cont = next;
-      }
-      items.sort((a, b) => (a.lastModified < b.lastModified ? 1 : -1));
-      return json({ ok: true, count: items.length, items });
+      const pager = pickPage(url, await listPrefix(env, prefix));
+      return json({ ok: true, ...pager });
     }
 
     if (req.method === "POST" && url.pathname === "/delete") {
@@ -414,6 +547,7 @@ export default {
         const t = await r.text();
         return json({ error: `B2 ${r.status}: ${t.slice(0, 150)}` }, 502);
       }
+      invalidateList();
       return json({ ok: true, key });
     }
 
@@ -437,6 +571,7 @@ export default {
         const t = await put.text();
         return json({ error: `B2 ${put.status}: ${t.slice(0, 200)}` }, 502);
       }
+      invalidateList();
       return json({
         ok: true,
         key,
