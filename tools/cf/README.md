@@ -281,9 +281,12 @@ ssh hw 'sudo tail -f /var/log/nginx/access.log'  # 访问日志
 
 ## 7. 文档副本位置
 
-- 沙箱：`/workspace/tools/cf/README.md`
+- 沙箱：`/workspace/tools/cf/README.md`（同时作为推送到仓库的源）
 - ECS：`/home/zzz/tools/cf/README.md`
 - GitHub 私有仓库：`zplgethub/trae` 的 `cf/` 目录
-- B2 私有桶：HTML + Markdown 两个版本，**已由 Cloudflare Access 保护**，仅授权邮箱（账号邮箱）通过验证码后可访问，未登录一律 302 到登录页
+- B2 私有桶在线版（Access 保护，需邮箱验证码）：
+  - 阅读版 HTML：`https://docs.xzqf.nyc.mn/private/doc/cf-b2-ops.html`
+  - 源文件 MD：`https://docs.xzqf.nyc.mn/private/doc/cf-b2-ops.md`
+- 更新顺序：改本文件 → 重传 B2 两个版本 → 推送仓库 → 同步 ECS 副本，四者保持一致
 
-> 本文档含 IP、端口、用户名等基础设施信息，不要公开传播直链；B2 上的旧公开版本已删除。
+> 本文档含 IP、端口、用户名等基础设施信息，不要公开传播直链。
