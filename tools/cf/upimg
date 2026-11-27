@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# upimg - 把图片/文件同步到 Cloudflare Pages 图床并部署
+set -euo pipefail
+
+BASE="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+CONF="${UPIMG_CONF:-$BASE/upimg.env}"
+# shellcheck disable=SC1090
+[ -f "$CONF" ] && . "$CONF"
+: "${CLOUDFLARE_API_TOKEN:?缺少 CLOUDFLARE_API_TOKEN，请检查 $CONF}"
+: "${CLOUDFLARE_ACCOUNT_ID:?缺少 CLOUDFLARE_ACCOUNT_ID}"
+export CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
+
+PROJECT="${PAGES_PROJECT:-xzqf-img}"
+ROOT="${IMG_ROOT:-$BASE/images}"
+SITE="${PUBLIC_URL:-https://img.xzqf.nyc.mn}"
+# B2 实时通道：与 Pages 保持同一份文件，路径固定为 public/img/<文件名>
+UP_BASE="${UP_BASE:-https://up.xzqf.nyc.mn}"
+UPLOAD_TOKEN="${UPLOAD_TOKEN:-}"
+LOG="${UPIMG_LOG:-$BASE/logs/deploy.log}"
+mkdir -p "$ROOT" "$(dirname -- "$LOG")"
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  printf '用法: upimg [文件或目录]...\n不传参数时，直接重新部署 %s\n' "$ROOT"
+  exit 0
+fi
+
+if [ $# -lt 1 ]; then
+  echo "未指定文件，直接重新部署现有目录：$ROOT"
+fi
+
+mkdir -p "$ROOT"
+new_files=()
+for p in "$@"; do
+  if [ -d "$p" ]; then
+    while IFS= read -r -d '' f; do
+      cp -f -- "$f" "$ROOT/"
+      new_files+=("$(basename "$f")")
+    done < <(find "$p" -maxdepth 1 -type f ! -name 'index.html' -print0)
+  elif [ -f "$p" ]; then
+    cp -f -- "$p" "$ROOT/"
+    new_files+=("$(basename "$p")")
+  else
+    echo "跳过（不存在）: $p" >&2
+  fi
+done
+
+if [ $# -gt 0 ] && [ ${#new_files[@]} -eq 0 ]; then
+  echo "没有可上传的文件" >&2
+  exit 1
+fi
+
+# 同步到 B2（public/img/），保证 docs 域实时通道与 Pages 内容一致
+if [ ${#new_files[@]} -gt 0 ]; then
+  if [ -n "$UPLOAD_TOKEN" ]; then
+    echo "同步到 B2：$UP_BASE  public/img/"
+    n=0
+    for f in "${new_files[@]}"; do
+      ct=$(file -b --mime-type "$ROOT/$f")
+      enc=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "$f")
+      code=$(curl -sS -o /tmp/upimg_up.json -w '%{http_code}' -X POST \
+        --data-binary @"$ROOT/$f" -H "x-upload-token: $UPLOAD_TOKEN" \
+        -H "content-type: $ct" "$UP_BASE/upload?name=public/img/$enc")
+      if [ "$code" = "200" ]; then
+        echo "  B2  ✓ $f"
+      else
+        echo "  B2  ✗ $f (HTTP $code) $(head -c 120 /tmp/upimg_up.json)" >&2
+      fi
+      n=$((n+1))
+      if [ $((n % 10)) -eq 0 ]; then
+        echo "  已达到 10 张/分钟上限，等待 60 秒..." >&2
+        sleep 60
+      fi
+    done
+  else
+    echo "未配置 UPLOAD_TOKEN，跳过 B2 同步（只发布 Pages）" >&2
+  fi
+fi
+
+python3 - "$ROOT" <<'PY'
+import html, os, sys, time
+
+root = sys.argv[1]
+img_ext = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.avif', '.bmp', '.ico'}
+items = [f for f in os.listdir(root)
+         if os.path.isfile(os.path.join(root, f)) and f != 'index.html']
+items.sort(key=lambda f: os.path.getmtime(os.path.join(root, f)), reverse=True)
+
+rows = []
+for f in items:
+    path = os.path.join(root, f)
+    size = os.path.getsize(path)
+    mtime = time.strftime('%Y-%m-%d %H:%M', time.localtime(os.path.getmtime(path)))
+    ext = os.path.splitext(f)[1].lower()
+    if ext in img_ext:
+        thumb = f'<img class="t" src="/{html.escape(f)}" loading="lazy" alt="">'
+    else:
+        thumb = '<div class="t ph"></div>'
+    rows.append(
+        f'    <li>{thumb}<div class="m">'
+        f'<a href="/{html.escape(f)}">{html.escape(f)}</a>'
+        f'<span>{size / 1024:.1f} KB · {mtime}</span></div></li>'
+    )
+
+doc = f'''<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>xzqf 图床</title>
+<style>
+ body{{font-family:system-ui,-apple-system,sans-serif;max-width:980px;margin:40px auto;padding:0 16px;color:#0f172a;background:#f8fafc}}
+ h1{{font-size:20px}} .n{{color:#64748b;font-weight:400;font-size:14px;margin-left:8px}}
+ ul{{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}}
+ li{{background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden}}
+ .t{{width:100%;height:130px;object-fit:cover;display:block;background:#f1f5f9}}
+ .ph{{background:linear-gradient(135deg,#eef2f7,#e2e8f0)}}
+ .m{{padding:10px}} .m a{{color:#0f172a;text-decoration:none;font-size:13px;word-break:break-all;display:block}}
+ .m span{{color:#94a3b8;font-size:12px}}
+</style></head><body>
+<h1>xzqf 图床<span class="n">{len(items)} 个文件</span></h1>
+<ul>
+{chr(10).join(rows)}
+</ul></body></html>
+'''
+with open(os.path.join(root, 'index.html'), 'w', encoding='utf-8') as fp:
+    fp.write(doc)
+print(f'已生成索引，共 {len(items)} 个文件')
+PY
+
+echo "正在部署到 Cloudflare Pages ..."
+cd "$ROOT"
+if ! wrangler pages deploy . --project-name="$PROJECT" --branch=main --commit-dirty=true > "$LOG" 2>&1; then
+  echo "部署失败，最后 15 行日志（$LOG）：" >&2
+  tail -15 "$LOG" >&2
+  exit 1
+fi
+
+echo "部署完成"
+echo "访问： $SITE/"
+for f in "${new_files[@]}"; do
+  echo "  $SITE/$f"
+done

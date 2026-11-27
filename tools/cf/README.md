@@ -178,10 +178,12 @@ sudo systemctl restart cloudflared
 ~/tools/cf/img/upimg ./某目录/        # 传目录内文件
 ```
 
-- 目录结构：`~/tools/cf/img/{upimg, upimg.env, images/, logs/}`
-- 上传目标已统一为 `public/img/<文件名>`，Pages 站点内仍使用文件名本身，因此 `img.xzqf.nyc.mn/<文件名>` 形式不变
-- 删图：删除 `images/` 内文件后无参重跑
-- 配置文件 `upimg.env` 含 CF Token 与 Account ID，权限 600
+- 目录结构：`~/tools/cf/img/{upimg, upimg.env, images/, logs/}`；脚本已归档到本仓库 `cf/upimg`
+- **双通道**：一次 `upimg` 同时做两件事 —— ① 上传 B2 `public/img/<文件名>`（docs 域实时通道）② 重新生成索引并部署 Pages（`img` 域静态通道，免流量）
+- Pages 站点内仍使用文件名本身，因此 `img.xzqf.nyc.mn/<文件名>` 形式不变
+- 删图：删除 `images/` 内文件后无参重跑；B2 侧需另在管理页删除。注意 Pages 边缘缓存 TTL 4 小时，删除后可能仍可访问一段时间
+- 配置文件 `upimg.env` 含 CF Token、Account ID、`UPLOAD_TOKEN`（Worker 上传密钥），权限 600
+- 批量上传超过 10 张会自动等待 60 秒（Worker 单 IP 限流 10 次/分钟）
 
 ### 4.5 手机上传 / 图库 / 删除（B2 / up）
 
