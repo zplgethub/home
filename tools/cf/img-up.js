@@ -66,6 +66,7 @@ const PAGE = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 </style></head><body>
 <h1>xzqf 图床 · 手机上传</h1><p>填入上传密钥，选择图片，自动返回直链。</p>
 <input id="token" placeholder="上传密钥" autocomplete="off">
+<select id="scope"><option value="public/img">公开图片</option><option value="private/img">私有图片（需邮箱验证码查看）</option></select>
 <input id="file" type="file" accept="image/*">
 <button id="go">上传</button><div id="out"></div><img id="preview">
 <p style="text-align:center"><a href="/g" style="color:#0284c7;text-decoration:none;font-size:14px">查看全部图片 →</a></p>
@@ -77,7 +78,7 @@ $('go').onclick=async()=>{
   if(!token||!f)return alert('先填密钥并选择图片');
   localStorage.setItem('up_token',token);$('go').disabled=true;$('go').textContent='上传中...';
   try{
-    const r=await fetch('/upload?name='+encodeURIComponent(f.name),{method:'POST',headers:{'x-upload-token':token,'content-type':f.type||'application/octet-stream'},body:f});
+    const r=await fetch('/upload?name='+document.getElementById('scope').value+'/'+encodeURIComponent(f.name),{method:'POST',headers:{'x-upload-token':token,'content-type':f.type||'application/octet-stream'},body:f});
     const j=await r.json();if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
     $('out').style.display='block';$('out').innerHTML='上传成功：<br><a href="'+j.url+'" target="_blank">'+j.url+'</a>';
     const p=$('preview');p.src=j.url;p.style.display='block';
@@ -183,6 +184,7 @@ a{color:#4B3FE3;text-decoration:none}
 <input type="file" id="file">
 <label>访问级别</label>
 <select id="scope"><option value="private">私有（需邮箱验证码）</option><option value="public">公开（任何人可读）</option></select>
+<select id="type"><option value="doc">文档 doc</option><option value="img">图片 img</option></select>
 <label>文件名（英文小写，不含扩展名也可，会自动补全）</label>
 <input type="text" id="name" placeholder="例如 home-redesign-plan">
 <button id="up" style="margin-top:12px">上传 / 覆盖</button>
@@ -192,7 +194,7 @@ a{color:#4B3FE3;text-decoration:none}
 
 <div class="panel">
 <button class="ghost" id="reload">刷新列表</button>
-<table><thead><tr><th>文档</th><th>级别</th><th>大小</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table>
+<table><thead><tr><th>名称</th><th>级别</th><th>类型</th><th>大小</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table>
 </div>
 
 <script>
@@ -209,10 +211,10 @@ function curName(){
 document.getElementById('up').onclick=function(){
   saveTok();if(!tok)return msg('请先填上传密钥');
   var f=document.getElementById('file').files[0];if(!f)return msg('请选择文件');
-  var scope=document.getElementById('scope').value;var name=curName();
+  var scope=document.getElementById('scope').value;var type=document.getElementById('type').value;var name=curName();
   if(!name)return msg('请填写文件名');
   var btn=this;btn.disabled=true;msg('上传中…');
-  fetch('/upload?name='+scope+'/'+encodeURIComponent(name),{method:'POST',headers:{'x-upload-token':tok,'content-type':f.type||'application/octet-stream'},body:f})
+  fetch('/upload?name='+scope+'/'+type+'/'+encodeURIComponent(name),{method:'POST',headers:{'x-upload-token':tok,'content-type':f.type||'application/octet-stream'},body:f})
   .then(function(r){return r.json();}).then(function(j){
     btn.disabled=false;
     if(!j.ok)return msg('失败：'+(j.error||''));
@@ -227,12 +229,13 @@ function load(){
     var rows=document.getElementById('rows');rows.innerHTML='';
     (j.items||[]).forEach(function(it){
       var tr=document.createElement('tr');
-      var level=it.key.split('/')[0];
-      var isIndex=it.key==='public/docs-index.html'||it.key==='private/docs-index.html';
-      tr.innerHTML='<td><a href="https://docs.xzqf.nyc.mn/'+it.key+'" target="_blank">'+it.key.split('/').slice(1).join('/')+'</a></td>'
+      var parts=it.key.split('/');
+      var level=parts[0];var ctype=parts[1]||'-';
+      tr.innerHTML='<td><a href="https://docs.xzqf.nyc.mn/'+it.key+'" target="_blank">'+parts.slice(2).join('/')+'</a></td>'
         +'<td><span class="tag '+(level==='private'?'pri':'')+'">'+level+'</span></td>'
+        +'<td>'+ctype+'</td>'
         +'<td>'+(it.size/1024).toFixed(0)+' KB</td>'
-        +'<td>'+(isIndex?'<span class="tag">索引页·受保护</span>':'<button class="del">删除</button>')+'</td>';
+        +'<td><button class="del">删除</button></td>';
       var delBtn=tr.querySelector('.del');
       if(delBtn)delBtn.onclick=function(){
         if(!confirm('确定删除 '+it.key+' ？'))return;
@@ -345,7 +348,7 @@ export default {
         let key = decodeURIComponent(url.pathname.slice(1)).replace(/\/$/, "");
         if (!key || key === "public" || key === "public/docs-index.html" || key === "private") {
           const scope = key === "private" ? "private" : "public";
-          const items = (await listDocs(env)).filter((it) => it.key.startsWith(scope + "/"));
+          const items = (await listDocs(env)).filter((it) => it.key.startsWith(scope + "/doc/"));
           return new Response(renderDocsIndex(items, scope), {
             headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" },
           });
@@ -356,7 +359,7 @@ export default {
         if (!obj.ok) return json({ error: "not found" }, 404);
         const out = new Headers();
         out.set("content-type", obj.headers.get("content-type") || "application/octet-stream");
-        out.set("cache-control", key.startsWith("private/") ? "private, no-cache" : "public, max-age=3600");
+        out.set("cache-control", key.startsWith("private/") ? "private, no-cache" : key.startsWith("public/img/") ? "public, max-age=2592000, immutable" : "public, max-age=3600");
         out.set("x-content-type-options", "nosniff");
         return new Response(req.method === "HEAD" ? null : obj.body, { status: 200, headers: out });
       }
@@ -370,7 +373,7 @@ export default {
 
     if (req.method === "GET" && url.pathname === "/list") {
       if (!authed) return json({ error: "invalid token" }, 401);
-      const prefix = url.searchParams.get("prefix") || "";
+      const prefix = url.searchParams.get("prefix") || "public/img/";
       const items = [];
       let cont = "";
       for (let page = 0; page < 5; page++) {
@@ -387,7 +390,7 @@ export default {
           const key = (/<Key>(.*?)<\/Key>/.exec(b) || [])[1];
           const size = Number((/<Size>(\d+)<\/Size>/.exec(b) || [])[1] || 0);
           const lm = (/<LastModified>(.*?)<\/LastModified>/.exec(b) || [])[1] || "";
-          if (key && !/^(private|public)\//.test(key)) items.push({ key, size, lastModified: lm, url: `${url.origin}/f/${key}` });
+          if (key && key.startsWith(prefix)) items.push({ key, size, lastModified: lm, url: `https://docs.xzqf.nyc.mn/${key}` });
         }
         const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
         let next = (/<NextContinuationToken>(.*?)<\/NextContinuationToken>/.exec(xml) || [])[1];
@@ -419,14 +422,15 @@ export default {
       const ip = req.headers.get("cf-connecting-ip") || "unknown";
       if (!rateAllow(ip, 10, 60000)) return json({ error: "rate limit: max 10 uploads/min" }, 429);
       const rawName = url.searchParams.get("name") || "file";
-      const m = /^(private|public)\//.exec(rawName);
-      const scope = m ? m[1] : "";
-      const name = (m ? rawName.slice(scope.length + 1) : rawName).replace(/[^\w.\-]+/g, "_").slice(-80);
+      const m = /^(private|public)\/(?:(doc|img)\/)?(.+)$/.exec(rawName);
+      const scope = m ? m[1] : "public";
+      const type = (m && m[2]) || "doc";
+      const name = (m ? m[3] : rawName).replace(/[^\w.\-]+/g, "_").slice(-80);
       const ct = req.headers.get("content-type") || "application/octet-stream";
       const body = await req.arrayBuffer();
       if (!body.byteLength) return json({ error: "empty body" }, 400);
       if (body.byteLength > 25 * 1024 * 1024) return json({ error: "file too large (max 25MB)" }, 413);
-      const key = scope ? `${scope}/${name}` : `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${name}`;
+      const key = `${scope}/${type}/${name}`;
       const signed = await signRequest(env, "PUT", key, body);
       const put = await fetch(signed.url, { method: "PUT", headers: { ...signed.headers, "content-type": ct }, body });
       if (!put.ok) {
@@ -437,7 +441,7 @@ export default {
         ok: true,
         key,
         protected: scope === "private",
-        url: scope ? `https://docs.xzqf.nyc.mn/${key}` : `${url.origin}/f/${key}`,
+        url: `https://docs.xzqf.nyc.mn/${key}`,
       });
     }
 

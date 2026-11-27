@@ -84,15 +84,16 @@
 
 - Worker 在 CF 边缘运行，用 **AWS SigV4** 签名直接调用 B2 的 S3 兼容 API。
 - 桶保持 **Private**，因此 B2 不需要绑卡；Key 只存 Worker Secret，前端不可见。
-- 接口：
-  - `POST /upload?name=xxx`：上传（需 `x-upload-token`），自动加时间戳+随机前缀防覆盖，单文件 25MB
-  - `GET /list`：列出文件（需密钥，支持 `token` 查询参数），最多 5000 条
+- **桶内统一结构（2026-11-27 起）**：`级别/类型/文件名`，级别 = `public|private`，类型 = `doc|img`。根级不再存放文件。
+- `up` 域负责**写与管理**：
+  - `POST /upload?name=public/img/x.jpg`：上传（需 `x-upload-token`），key 固定、同名覆盖；不带前缀时默认 `public/doc/`，单文件 25MB
+  - `GET /list?prefix=public/img/`：列出指定前缀内容（需密钥，默认 `public/img/`）
   - `POST /delete?key=xxx`：删除（需密钥）
-  - `GET|HEAD /f/<key>`：直链，带 `immutable` 缓存头
-  - `GET /g`：图库页面（缩略图、详情、复制直链、删除）
+  - `GET /g`：公开图库页面；`GET /`：手机上传页（可选公开/私有图片）
   - `GET /health`：健康检查
-- **缓存**：`/f/` 使用 Cache API（`caches.default`）写入边缘缓存，命中后不再回 B2。
-- **限流**：上传接口单 IP 10 次/分钟（Worker 内存计数，单实例尽力而为，替代免费版不可用的 Rate Limiting）。
+  - **`/f/<key>` 直链已下线**，实时读取统一走 docs 域
+- `docs` 域负责**实时读取**：`/public/...` 公开、`/private/...` 需 Access；公开文档缓存 1 小时，公开图片 30 天 immutable，私有内容不缓存。
+- **限流**：上传接口单 IP 10 次/分钟（Worker 内存计数，单实例尽力而为）。
 
 ### 3.5 边缘安全与缓存
 
@@ -107,20 +108,22 @@
 - 目标邮箱为账号邮箱（foxmail），且存在 **catch-all（全匹配）规则**。
 - 因此 `任意前缀@xzqf.nyc.mn` 都会转发到目标邮箱，无需逐个建规则。
 
-### 3.7 文档中心（docs，公开/私有分级）
+### 3.7 统一内容模型：文档 + 图片，公开 / 私有分级
 
-- **统一入口：`https://docs.xzqf.nyc.mn/`**，公开可访问，返回文档中心页面（索引文件 `public/docs-index.html`）
-- 路径分级：
-  - `https://docs.xzqf.nyc.mn/public/<文件名>` → **公开文档**，任何人可读，缓存 1 小时
-  - `https://docs.xzqf.nyc.mn/private/<文件名>` → **私有文档**，Access 拦截，仅 `Flying_zh@foxmail.com`、`zh_octopus@qq.com` 可 OTP 登录，会话 24 小时，不写缓存
-- Access 应用为 `docs-private`，**作用域只到 `docs.xzqf.nyc.mn/private` 路径**，因此入口和公开文档不需要登录
-- 上传时 `name` 以 `public/` 或 `private/` 开头即进入文档区：
-  - key 固定为 `<级别>/<文件名>`，**不加时间戳、同名覆盖**，链接长期不变
-  - 返回的 `url` 自动指向 `docs.xzqf.nyc.mn`
-- **隔离**：`up.xzqf.nyc.mn` 对 `private/`、`public/` 前缀一律 404，`/list` 与图库 `/g` 也会过滤，文档只在 docs 域出现
-- **文档中心自动收录**：`https://docs.xzqf.nyc.mn/` 只列 **public** 文档；`https://docs.xzqf.nyc.mn/private` 列 **private** 文档（该路径本身也受 Access 保护）。两处都由 Worker 实时生成（`no-cache`），上传即出现、删除即消失，**无需维护索引文件**
-- **索引防误删保留**：`/delete` 仍拒绝删除遗留的 `public/docs-index.html` 静态文件；`/update-index` 服务端校验仅接受完整 HTML（历史兼容接口，新流程已不调用）
-- 文件名用英文小写达意命名（如 `home-redesign-plan.md`），中文会被清洗为下划线
+**访问路径总表**
+
+| 内容 | 桶内 key | 实时访问（Worker 读 B2） | 静态访问（Pages） | 鉴权 |
+|---|---|---|---|---|
+| 公开文档 | `public/doc/x.md` | `docs.xzqf.nyc.mn/public/doc/x.md` | — | 无 |
+| 公开图片 | `public/img/x.jpg` | `docs.xzqf.nyc.mn/public/img/x.jpg` | `img.xzqf.nyc.mn/x.jpg`（upimg 发布，免流量通道） | 无 |
+| 私有文档 | `private/doc/x.md` | `docs.xzqf.nyc.mn/private/doc/x.md` | — | 邮箱验证码 |
+| 私有图片 | `private/img/x.jpg` | `docs.xzqf.nyc.mn/private/img/x.jpg` | — | 邮箱验证码 |
+
+- **职责划分**：`up` = 上传/删除/列表/图库管理；`docs` = 实时读取 + 统一管理页 + Access；`img` = 公开图片静态分发
+- Access 应用 `docs-private` 只作用于 `docs.xzqf.nyc.mn/private` 路径，授权邮箱：`Flying_zh@foxmail.com`、`zh_octopus@qq.com`，会话 24 小时
+- **索引自动生成**：`docs/` 只列 `public/doc/`，`docs/private` 只列 `private/doc/`（图片不会混进文档索引），实时生成无需维护索引文件
+- key 固定、**同名覆盖、链接不变**；文件名用英文小写达意命名，中文会被清洗为下划线
+- 公开图片建议用唯一文件名（默认带时间戳），同名覆盖后需清缓存才立即生效
 
 ---
 
@@ -167,6 +170,7 @@ sudo systemctl restart cloudflared
 ```
 
 - 目录结构：`~/tools/cf/img/{upimg, upimg.env, images/, logs/}`
+- 上传目标已统一为 `public/img/<文件名>`，Pages 站点内仍使用文件名本身，因此 `img.xzqf.nyc.mn/<文件名>` 形式不变
 - 删图：删除 `images/` 内文件后无参重跑
 - 配置文件 `upimg.env` 含 CF Token 与 Account ID，权限 600
 
@@ -177,23 +181,22 @@ sudo systemctl restart cloudflared
 - 命令行：
 
 ```bash
-curl -X POST "https://up.xzqf.nyc.mn/upload?name=pic.jpg" \
+curl -X POST "https://up.xzqf.nyc.mn/upload?name=public/img/pic.jpg" \
   -H "x-upload-token: <上传密钥>" -H "content-type: image/jpeg" --data-binary @pic.jpg
 
-curl "https://up.xzqf.nyc.mn/list?token=<上传密钥>"
+curl "https://up.xzqf.nyc.mn/list?token=<上传密钥>"          # 默认列 public/img/
+curl "https://up.xzqf.nyc.mn/list?prefix=private/img/&token=<上传密钥>"
 
 curl -X POST "https://up.xzqf.nyc.mn/delete?key=<key>" -H "x-upload-token: <上传密钥>"
 ```
 
-### 4.6 文档管理页（免命令行）
+### 4.6 统一内容管理页（免命令行）
 
-地址：**`https://docs.xzqf.nyc.mn/admin`**
+地址：**`https://docs.xzqf.nyc.mn/admin`**（文档与图片共用，不再单独建 up 管理页）
 
 - 粘贴一次上传密钥（存在浏览器 localStorage），之后打开即用
-- 上传：选文件 → 选级别（private/public）→ 填文件名（可留空用原文件名，自动补扩展名）→ 同名覆盖
-- 勾选“自动收录”已不需要：上传成功后文档中心立即出现该文档
-- 列表区可打开文档、删除文档（公开文档删除后缓存最长 1 小时自愈）
-- 配套接口：`/list-docs`（文档列表）、`/index-source`、`/update-index`，均需上传密钥
+- 上传：选文件 → 选级别（public/private）→ 选类型（doc/img）→ 填文件名（可留空用原文件名）→ 同名覆盖
+- 列表区可打开、复制链接、删除；公开文档删除后缓存最长 1 小时自愈，公开图片删除后需清缓存
 - 管理页本身不需要 Access 登录，所有写操作由上传密钥保护
 
 ### 4.7 修改 Worker 代码
